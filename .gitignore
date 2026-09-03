@@ -12,3 +12,5 @@ coverage
 logs
 run
 .tmp-run-user-cmd.sh
+docs/
+.cursor/Assignment.md
