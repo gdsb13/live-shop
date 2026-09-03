@@ -5,12 +5,14 @@ import { api } from '@/lib/api';
 import { attachRtcChat, detachRtcChat } from '@/lib/agora/rtcChatBridge';
 import { viewerRtcUserId } from '@/lib/agora/identity';
 import { joinRtcChannel, releaseRtcChannel } from '@/lib/agora/rtcSession';
+import { onLiveAudioDuck } from '@/lib/liveAudioBridge';
 
 type ConnectionState = 'idle' | 'connecting' | 'watching' | 'waiting' | 'ended' | 'error';
 
 export function useViewerPlayer(sessionId: string, sessionStatus: string) {
   const videoRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<import('agora-rtc-sdk-ng').IAgoraRTCClient | null>(null);
+  const hostAudioTracksRef = useRef<Array<import('agora-rtc-sdk-ng').IRemoteAudioTrack | null>>([]);
   const userIdRef = useRef('');
   const channelRef = useRef('');
   const connectGenRef = useRef(0);
@@ -18,6 +20,7 @@ export function useViewerPlayer(sessionId: string, sessionStatus: string) {
   const [statusText, setStatusText] = useState('');
 
   const cleanup = useCallback(async () => {
+    hostAudioTracksRef.current = [];
     const client = clientRef.current;
     const userId = userIdRef.current;
     const channelName = channelRef.current;
@@ -77,6 +80,7 @@ export function useViewerPlayer(sessionId: string, sessionStatus: string) {
         }
         if (mediaType === 'audio' && remoteUser.audioTrack) {
           remoteUser.audioTrack.play();
+          hostAudioTracksRef.current.push(remoteUser.audioTrack);
         }
       });
 
@@ -123,6 +127,9 @@ export function useViewerPlayer(sessionId: string, sessionStatus: string) {
         if (remoteUser.hasAudio) {
           await client.subscribe(remoteUser, 'audio');
           remoteUser.audioTrack?.play();
+          if (remoteUser.audioTrack) {
+            hostAudioTracksRef.current.push(remoteUser.audioTrack);
+          }
         }
       }
 
@@ -178,6 +185,14 @@ export function useViewerPlayer(sessionId: string, sessionStatus: string) {
 
     return undefined;
   }, [cleanup, connect, sessionStatus]);
+
+  useEffect(() => {
+    return onLiveAudioDuck((ducked) => {
+      hostAudioTracksRef.current.forEach((track) => {
+        track?.setVolume(ducked ? 0 : 100);
+      });
+    });
+  }, []);
 
   return { videoRef, state, statusText };
 }

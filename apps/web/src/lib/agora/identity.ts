@@ -40,3 +40,8 @@ export function setSessionChatName(sessionId: string, name: string, isHost = fal
   if (typeof window === 'undefined') return;
   window.sessionStorage.setItem(chatNameKey(sessionId, isHost), name.trim());
 }
+
+/** Stable private Voice AI shopper id for this browser tab. */
+export function voiceShopperUserId() {
+  return `shopper-ai-${getPageClientId()}`;
+}

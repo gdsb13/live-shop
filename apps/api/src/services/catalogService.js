@@ -17,19 +17,24 @@ function listProducts({ category, search } = {}) {
   }
 
   if (search) {
-    const q = search.trim().toLowerCase();
+    const q = search.trim().toLowerCase().replace(/[^\w\s'-]/g, ' ').replace(/\s+/g, ' ').trim();
+    const tokens = q.split(/\s+/).filter((token) => token.length > 1);
     result = result.filter((p) => {
       const haystack = [
         p.name,
         p.brand,
         p.description,
         p.category,
+        p.id,
         ...(p.features || []),
         ...Object.values(p.specifications || {}),
       ]
         .join(' ')
         .toLowerCase();
-      return haystack.includes(q);
+      if (!q) return true;
+      if (haystack.includes(q)) return true;
+      if (tokens.length === 0) return false;
+      return tokens.every((token) => haystack.includes(token));
     });
   }
 

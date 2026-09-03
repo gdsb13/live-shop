@@ -2,6 +2,7 @@ import { DM_Sans, Fraunces } from 'next/font/google';
 import './globals.css';
 import { CartProvider } from '@/components/CartProvider';
 import { Header } from '@/components/Header';
+import { VoiceAssistantPanel } from '@/components/VoiceAssistantPanel';
 
 const sans = DM_Sans({
   subsets: ['latin'],
@@ -29,6 +30,7 @@ export default function RootLayout({
         <CartProvider>
           <Header />
           {children}
+          <VoiceAssistantPanel />
         </CartProvider>
       </body>
     </html>

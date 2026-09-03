@@ -42,3 +42,18 @@ stop_pidfile() {
 
 stop_pidfile "backend" "$RUN_DIR/api.pid"
 stop_pidfile "frontend" "$RUN_DIR/web.pid"
+
+# Kill orphaned listeners left behind when PID files are stale (common during dev).
+API_PORT="${API_PORT:-3001}"
+WEB_PORT="${WEB_PORT:-3000}"
+if command -v fuser >/dev/null 2>&1; then
+  fuser -k "${API_PORT}/tcp" 2>/dev/null || true
+  fuser -k "${WEB_PORT}/tcp" 2>/dev/null || true
+elif command -v lsof >/dev/null 2>&1; then
+  for port in "$API_PORT" "$WEB_PORT"; do
+    pids="$(lsof -ti tcp:"$port" 2>/dev/null || true)"
+    if [[ -n "$pids" ]]; then
+      kill $pids 2>/dev/null || true
+    fi
+  done
+fi

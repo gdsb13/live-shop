@@ -58,6 +58,7 @@ if is_running "$RUN_DIR/api.pid" || is_running "$RUN_DIR/web.pid"; then
 fi
 
 export API_PORT API_HOST WEB_ORIGIN NEXT_PUBLIC_API_URL AGORA_APP_ID AGORA_APP_CERTIFICATE AGORA_SIGNALING_AREA
+export AI_PUBLIC_BASE_URL AI_CUSTOM_LLM_API_KEY AGORA_AI_AREA
 export API_PROXY_TARGET="http://127.0.0.1:${API_PORT}"
 
 setsid nohup node "$ROOT/apps/api/src/server.js" >>"$LOG_DIR/api.log" 2>&1 </dev/null &
@@ -67,6 +68,12 @@ setsid nohup env API_PROXY_TARGET="$API_PROXY_TARGET" pnpm --filter web exec nex
 echo $! >"$RUN_DIR/web.pid"
 
 wait_http "http://127.0.0.1:${API_PORT}/health" "backend"
+if ! curl -sf "http://127.0.0.1:${API_PORT}/api/ai/status" | grep -q searchProducts; then
+  echo "start.sh: API is up but Voice AI routes are missing or broken." >&2
+  echo "start.sh: tail of logs/api.log:" >&2
+  tail -30 "$LOG_DIR/api.log" >&2 || true
+  exit 1
+fi
 wait_http "http://127.0.0.1:${WEB_PORT}" "frontend"
 
 echo "start.sh: backend  http://localhost:${API_PORT}/health"

@@ -11,6 +11,8 @@
     "stop:app": "bash ./scripts/stop.sh",
     "status:app": "bash ./scripts/status.sh",
     "test:phase3": "bash ./scripts/test-phase3.sh",
-    "test:phase4": "bash ./scripts/test-phase4.sh"
+    "test:phase4": "bash ./scripts/test-phase4.sh",
+    "test:phase5": "bash ./scripts/test-phase5.sh",
+    "verify:phase5": "node ./scripts/verify-phase5-e2e.js"
   }
 }

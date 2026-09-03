@@ -27,6 +27,9 @@ app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     service: 'api',
+    features: {
+      voiceAi: true,
+    },
     timestamp: new Date().toISOString(),
   });
 });
@@ -39,9 +42,9 @@ app.use('/api/checkout', require('./routes/checkout'));
 app.use('/api/live-sessions', require('./routes/liveSessions'));
 app.use('/api/agora', require('./routes/agora'));
 app.use('/api/chat', require('./routes/chat'));
+app.use('/api/ai', require('./routes/ai'));
 
 // Later phases (not mounted yet):
-//   app.use('/api/ai', require('./routes/ai'));
 
 app.use((err, _req, res, _next) => {
   const status = err.status || 500;

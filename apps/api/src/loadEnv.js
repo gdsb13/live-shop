@@ -15,7 +15,7 @@ for (const line of content.split(/\r?\n/)) {
   if (separator === -1) continue;
   const key = trimmed.slice(0, separator).trim();
   const value = trimmed.slice(separator + 1).trim();
-  const alwaysReload = key.startsWith('AGORA_');
+  const alwaysReload = key.startsWith('AGORA_') || key.startsWith('AI_');
   if (!process.env[key] || alwaysReload) {
     process.env[key] = value;
   }

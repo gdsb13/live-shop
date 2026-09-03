@@ -10,6 +10,9 @@ importers:
 
   apps/api:
     dependencies:
+      agora-agents:
+        specifier: ^2.2.0
+        version: 2.7.0
       agora-token:
         specifier: ^2.0.6
         version: 2.0.6
@@ -293,6 +296,10 @@ packages:
   agent-base@6.0.2:
     resolution: {integrity: sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==}
     engines: {node: '>= 6.0.0'}
+
+  agora-agents@2.7.0:
+    resolution: {integrity: sha512-yNuWqnNHc7UiY91S5nMhjdxN7DDIWG08jiLRu/dJuIWZ0/W+WfBeW70BsSOQxBTlQqaI7DaNHmaN2xUOyKK7JQ==}
+    engines: {node: '>=18.0.0'}
 
   agora-rtc-sdk-ng@4.24.8:
     resolution: {integrity: sha512-TkHDu1HxYcjfbvpmOfOAucSgMJRlphODQlVN6fwAMCh7yIKt6J4O3wITNCvUkEVi9aaZTjeJOZ+onFUu/zlnuw==}
@@ -987,6 +994,10 @@ snapshots:
       debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
+
+  agora-agents@2.7.0:
+    dependencies:
+      agora-token: 2.0.6
 
   agora-rtc-sdk-ng@4.24.8:
     dependencies:

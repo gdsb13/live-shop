@@ -1,7 +1,6 @@
 const API_BASE =
-  typeof window === 'undefined'
-    ? process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:3001'
-    : '';
+  process.env.NEXT_PUBLIC_API_URL ??
+  (typeof window === 'undefined' ? 'http://127.0.0.1:3001' : '');
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
@@ -154,4 +153,51 @@ export const api = {
         body: JSON.stringify(body),
       },
     ),
+
+  getVoiceAiStatus: () =>
+    request<{
+      configured: boolean;
+      publicBaseConfigured: boolean;
+      mode: string;
+      allowedTools: string[];
+    }>('/api/ai/status'),
+
+  startVoiceAiSession: (body: {
+    surface: import('./voice/types').VoiceAssistantSurface;
+    shopperUserId: string;
+    liveSessionId?: string;
+    productId?: string;
+  }) =>
+    request<import('./voice/types').VoiceSessionStart>('/api/ai/session/start', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  stopVoiceAiSession: (body: { sessionId: string; shopperUserId: string }) =>
+    request<{ stopped: boolean }>('/api/ai/session/stop', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getVoiceAiSession: (sessionId: string) =>
+    request<{
+      sessionId: string;
+      mode: string;
+      state: string;
+      surface: string;
+      channel: string;
+      cartUpdated: boolean;
+      transcripts: import('./voice/types').VoiceTranscriptLine[];
+    }>(`/api/ai/session/${encodeURIComponent(sessionId)}`),
+
+  sendVoiceAiLocalTurn: (body: { sessionId: string; text: string }) =>
+    request<{
+      reply: string;
+      cartUpdated: boolean;
+      endSession?: boolean;
+      transcripts: import('./voice/types').VoiceTranscriptLine[];
+    }>('/api/ai/local/turn', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 };
