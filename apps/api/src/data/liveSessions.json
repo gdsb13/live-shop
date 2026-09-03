@@ -1,0 +1,72 @@
+[
+  {
+    "id": "live-tech-tuesday",
+    "title": "Flagship Tech Tuesday",
+    "description": "Live demos of this week's best electronics — TVs, audio and smartphones with honest comparisons.",
+    "hostName": "Priya Sharma",
+    "status": "LIVE",
+    "scheduledAt": "2026-09-02T11:00:00.000Z",
+    "startedAt": "2026-09-02T11:02:00.000Z",
+    "endedAt": null,
+    "productIds": ["elec-tv-samsung-55", "elec-headphones-sony", "elec-phone-oneplus"],
+    "featuredProductId": "elec-tv-samsung-55",
+    "thumbnail": "https://picsum.photos/seed/live-tech-tuesday/800/450",
+    "recordingUrl": null
+  },
+  {
+    "id": "live-beauty-hour",
+    "title": "Weekend Beauty Hour",
+    "description": "Skincare and makeup picks for the festive season — shades, routines and honest first impressions.",
+    "hostName": "Ananya Mehta",
+    "status": "SCHEDULED",
+    "scheduledAt": "2026-09-05T10:30:00.000Z",
+    "startedAt": null,
+    "endedAt": null,
+    "productIds": ["cosmetics-lipstick-lakme", "cosmetics-serum-mamaearth", "cosmetics-foundation-maybelline"],
+    "featuredProductId": null,
+    "thumbnail": "https://picsum.photos/seed/live-beauty-hour/800/450",
+    "recordingUrl": null
+  },
+  {
+    "id": "live-home-essentials",
+    "title": "Home Essentials Preview",
+    "description": "Kitchen and home upgrades you can actually use every day — kettles, flasks and lighting.",
+    "hostName": "Rahul Verma",
+    "status": "SCHEDULED",
+    "scheduledAt": "2026-09-08T09:00:00.000Z",
+    "startedAt": null,
+    "endedAt": null,
+    "productIds": ["home-kettle-prestige", "home-flask-milton", "home-lamp-philips"],
+    "featuredProductId": null,
+    "thumbnail": "https://picsum.photos/seed/live-home-essentials/800/450",
+    "recordingUrl": null
+  },
+  {
+    "id": "live-running-gear",
+    "title": "Running Gear Showcase",
+    "description": "Comfort-first running shoes and fitness trackers for everyday training.",
+    "hostName": "Priya Sharma",
+    "status": "ENDED",
+    "scheduledAt": "2026-08-28T07:00:00.000Z",
+    "startedAt": "2026-08-28T07:05:00.000Z",
+    "endedAt": "2026-08-28T08:00:00.000Z",
+    "productIds": ["apparel-shoes-nike", "lifestyle-band-mi"],
+    "featuredProductId": "apparel-shoes-nike",
+    "thumbnail": "https://picsum.photos/seed/live-running-gear/800/450",
+    "recordingUrl": "https://example.com/recordings/live-running-gear.mp4"
+  },
+  {
+    "id": "live-kitchen-replay",
+    "title": "Kitchen Must-Haves Replay",
+    "description": "Recorded session: durable kitchen staples that survived our host's daily use test.",
+    "hostName": "Rahul Verma",
+    "status": "ENDED",
+    "scheduledAt": "2026-08-20T12:00:00.000Z",
+    "startedAt": "2026-08-20T12:03:00.000Z",
+    "endedAt": "2026-08-20T13:00:00.000Z",
+    "productIds": ["home-kettle-prestige", "home-flask-milton"],
+    "featuredProductId": "home-kettle-prestige",
+    "thumbnail": "https://picsum.photos/seed/live-kitchen-replay/800/450",
+    "recordingUrl": "https://example.com/recordings/live-kitchen-replay.mp4"
+  }
+]

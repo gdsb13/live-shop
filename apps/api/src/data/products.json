@@ -1,0 +1,276 @@
+[
+  {
+    "id": "elec-tv-samsung-55",
+    "name": "Samsung Crystal 4K Ultra HD Smart TV",
+    "category": "Electronics",
+    "brand": "Samsung",
+    "description": "Crystal Processor 4K upscales content with vivid colour and sharp detail. A premium television for streaming, sports and movies. Smart TV with popular streaming apps and voice assistant support.",
+    "basePrice": 42999,
+    "images": ["https://images.unsplash.com/photo-1593359677873-a4bb92f829d1?w=800&q=80"],
+    "variants": [
+      { "id": "v-43", "name": "43 inch", "sku": "SAM-TV-43", "price": 32999, "inStock": true, "attributes": { "screen": "43\"" } },
+      { "id": "v-55", "name": "55 inch", "sku": "SAM-TV-55", "price": 42999, "inStock": true, "attributes": { "screen": "55\"" } },
+      { "id": "v-65", "name": "65 inch", "sku": "SAM-TV-65", "price": 54999, "inStock": true, "attributes": { "screen": "65\"" } }
+    ],
+    "specifications": { "Resolution": "4K Ultra HD", "Refresh rate": "60Hz", "HDR": "HDR10+", "Smart OS": "Tizen" },
+    "features": ["4K upscaling", "Adaptive Sound", "Multiple HDMI ports", "Voice control"],
+    "rating": 4.4,
+    "inStock": true
+  },
+  {
+    "id": "elec-headphones-sony",
+    "name": "Sony WH-1000XM5 Wireless Noise Cancelling Headphones",
+    "category": "Electronics",
+    "brand": "Sony",
+    "description": "Industry-leading noise cancellation with exceptional call quality and up to 30 hours battery life.",
+    "basePrice": 26990,
+    "images": ["https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=800&q=80"],
+    "variants": [
+      { "id": "v-black", "name": "Black", "sku": "SONY-XM5-BLK", "price": 26990, "inStock": true, "attributes": { "colour": "Black" } },
+      { "id": "v-silver", "name": "Silver", "sku": "SONY-XM5-SLV", "price": 26990, "inStock": true, "attributes": { "colour": "Silver" } }
+    ],
+    "specifications": { "Driver": "30mm", "Battery": "30 hours", "ANC": "Yes", "Bluetooth": "5.2" },
+    "features": ["Multipoint connection", "Speak-to-chat", "Quick charge", "Foldable design"],
+    "rating": 4.7,
+    "inStock": true
+  },
+  {
+    "id": "elec-phone-oneplus",
+    "name": "OnePlus Nord 4 5G",
+    "category": "Electronics",
+    "brand": "OnePlus",
+    "description": "Sleek metal unibody smartphone with flagship-grade performance, 80W SUPERVOOC charging and a bright AMOLED display.",
+    "basePrice": 29999,
+    "images": ["https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&q=80"],
+    "variants": [
+      { "id": "v-128-green", "name": "128GB / Mercurial Silver", "sku": "OP-N4-128-SLV", "price": 29999, "inStock": true, "attributes": { "storage": "128GB", "colour": "Mercurial Silver" } },
+      { "id": "v-256-green", "name": "256GB / Oasis Green", "sku": "OP-N4-256-GRN", "price": 32999, "inStock": true, "attributes": { "storage": "256GB", "colour": "Oasis Green" } }
+    ],
+    "specifications": { "Display": "6.74\" AMOLED 120Hz", "Processor": "Snapdragon 7+ Gen 3", "RAM": "8GB", "Camera": "50MP dual" },
+    "features": ["80W fast charging", "Dual speakers", "5G ready", "OxygenOS"],
+    "rating": 4.3,
+    "inStock": true
+  },
+  {
+    "id": "elec-tablet-ipad",
+    "name": "Apple iPad Air M2",
+    "category": "Electronics",
+    "brand": "Apple",
+    "description": "Powerful M2 chip in a thin, light design. Ideal for creativity, streaming and everyday productivity.",
+    "basePrice": 59900,
+    "images": ["https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=800&q=80"],
+    "variants": [
+      { "id": "v-wifi-128", "name": "Wi-Fi 128GB", "sku": "IPAD-AIR-128", "price": 59900, "inStock": true, "attributes": { "connectivity": "Wi-Fi", "storage": "128GB" } },
+      { "id": "v-wifi-256", "name": "Wi-Fi 256GB", "sku": "IPAD-AIR-256", "price": 74900, "inStock": false, "attributes": { "connectivity": "Wi-Fi", "storage": "256GB" } }
+    ],
+    "specifications": { "Chip": "Apple M2", "Display": "11\" Liquid Retina", "Battery": "Up to 10 hours", "Ports": "USB-C" },
+    "features": ["Apple Pencil support", "Centre Stage", "Touch ID", "All-day battery"],
+    "rating": 4.6,
+    "inStock": true
+  },
+  {
+    "id": "apparel-shirt-allen",
+    "name": "Allen Solly Slim Fit Formal Shirt",
+    "category": "Apparel",
+    "brand": "Allen Solly",
+    "description": "Premium cotton formal shirt with a modern slim fit, ideal for office and evening wear.",
+    "basePrice": 1899,
+    "images": ["https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=800&q=80"],
+    "variants": [
+      { "id": "v-white-m", "name": "White / M", "sku": "AS-SHIRT-W-M", "price": 1899, "inStock": true, "attributes": { "colour": "White", "size": "M" } },
+      { "id": "v-blue-l", "name": "Sky Blue / L", "sku": "AS-SHIRT-B-L", "price": 1899, "inStock": true, "attributes": { "colour": "Sky Blue", "size": "L" } },
+      { "id": "v-navy-xl", "name": "Navy / XL", "sku": "AS-SHIRT-N-XL", "price": 1999, "inStock": true, "attributes": { "colour": "Navy", "size": "XL" } }
+    ],
+    "specifications": { "Fabric": "100% Cotton", "Fit": "Slim", "Care": "Machine wash", "Collar": "Spread" },
+    "features": ["Breathable fabric", "Easy iron", "Wrinkle resistant"],
+    "rating": 4.2,
+    "inStock": true
+  },
+  {
+    "id": "apparel-shoes-nike",
+    "name": "Nike Revolution 7 Running Shoes",
+    "category": "Apparel",
+    "brand": "Nike",
+    "description": "Lightweight everyday running shoes with soft foam cushioning for comfortable miles.",
+    "basePrice": 3995,
+    "images": ["https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=80"],
+    "variants": [
+      { "id": "v-uk8", "name": "UK 8 / Black", "sku": "NIKE-REV-8", "price": 3995, "inStock": true, "attributes": { "size": "UK 8", "colour": "Black" } },
+      { "id": "v-uk9", "name": "UK 9 / Black", "sku": "NIKE-REV-9", "price": 3995, "inStock": true, "attributes": { "size": "UK 9", "colour": "Black" } },
+      { "id": "v-uk10", "name": "UK 10 / Grey", "sku": "NIKE-REV-10", "price": 4195, "inStock": true, "attributes": { "size": "UK 10", "colour": "Grey" } }
+    ],
+    "specifications": { "Upper": "Mesh", "Sole": "Rubber", "Weight": "Lightweight", "Use": "Road running" },
+    "features": ["Soft foam midsole", "Breathable upper", "Durable outsole"],
+    "rating": 4.5,
+    "inStock": true
+  },
+  {
+    "id": "apparel-jeans-levis",
+    "name": "Levi's 501 Original Fit Jeans",
+    "category": "Apparel",
+    "brand": "Levi's",
+    "description": "The original button-fly jean. Straight leg, classic fit, and timeless style.",
+    "basePrice": 3499,
+    "images": ["https://images.unsplash.com/photo-1542272604-787c3835535d?w=800&q=80"],
+    "variants": [
+      { "id": "v-30", "name": "W30 L32", "sku": "LEV-501-30", "price": 3499, "inStock": true, "attributes": { "waist": "30", "length": "32" } },
+      { "id": "v-32", "name": "W32 L32", "sku": "LEV-501-32", "price": 3499, "inStock": true, "attributes": { "waist": "32", "length": "32" } },
+      { "id": "v-34", "name": "W34 L32", "sku": "LEV-501-34", "price": 3599, "inStock": true, "attributes": { "waist": "34", "length": "32" } }
+    ],
+    "specifications": { "Fit": "Original straight", "Rise": "Mid rise", "Fabric": "Cotton denim", "Closure": "Button fly" },
+    "features": ["Iconic 501 cut", "Durable denim", "Classic indigo wash"],
+    "rating": 4.4,
+    "inStock": true
+  },
+  {
+    "id": "cosmetics-lipstick-lakme",
+    "name": "Lakmé Absolute Matte Lipstick Set",
+    "category": "Cosmetics",
+    "brand": "Lakmé",
+    "description": "Long-lasting matte lip colours with rich pigment and comfortable wear for all-day confidence.",
+    "basePrice": 1299,
+    "images": ["https://images.unsplash.com/photo-1586495777744-4413f21062af?w=800&q=80"],
+    "variants": [
+      { "id": "v-berry", "name": "Berry Crush", "sku": "LK-LIP-BRY", "price": 1299, "inStock": true, "attributes": { "shade": "Berry Crush" } },
+      { "id": "v-coral", "name": "Coral Desire", "sku": "LK-LIP-CRL", "price": 1299, "inStock": true, "attributes": { "shade": "Coral Desire" } }
+    ],
+    "specifications": { "Finish": "Matte", "Weight": "3.6g", "SPF": "None", "Vegan": "No" },
+    "features": ["8-hour wear", "Highly pigmented", "Smooth application"],
+    "rating": 4.1,
+    "inStock": true
+  },
+  {
+    "id": "cosmetics-serum-mamaearth",
+    "name": "Mamaearth Vitamin C Face Serum",
+    "category": "Cosmetics",
+    "brand": "Mamaearth",
+    "description": "Brightening serum with Vitamin C and turmeric to reduce dullness and improve skin radiance.",
+    "basePrice": 599,
+    "images": ["https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=800&q=80"],
+    "variants": [
+      { "id": "v-30ml", "name": "30ml", "sku": "ME-VC-30", "price": 599, "inStock": true, "attributes": { "volume": "30ml" } },
+      { "id": "v-50ml", "name": "50ml", "sku": "ME-VC-50", "price": 899, "inStock": true, "attributes": { "volume": "50ml" } }
+    ],
+    "specifications": { "Key ingredient": "Vitamin C", "Skin type": "All", "Paraben free": "Yes", "Volume": "30ml / 50ml" },
+    "features": ["Dermatologically tested", "Reduces dark spots", "Lightweight formula"],
+    "rating": 4.3,
+    "inStock": true
+  },
+  {
+    "id": "cosmetics-foundation-maybelline",
+    "name": "Maybelline Fit Me Matte + Poreless Foundation",
+    "category": "Cosmetics",
+    "brand": "Maybelline",
+    "description": "Natural matte finish foundation that adapts to skin tone and texture for a poreless look.",
+    "basePrice": 549,
+    "images": ["https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=800&q=80"],
+    "variants": [
+      { "id": "v-128", "name": "Shade 128 Warm Nude", "sku": "MB-FIT-128", "price": 549, "inStock": true, "attributes": { "shade": "128 Warm Nude" } },
+      { "id": "v-220", "name": "Shade 220 Natural Beige", "sku": "MB-FIT-220", "price": 549, "inStock": true, "attributes": { "shade": "220 Natural Beige" } }
+    ],
+    "specifications": { "Finish": "Matte", "Coverage": "Medium", "SPF": "SPF 18", "Volume": "30ml" },
+    "features": ["Oil-free", "Pore minimizing", "Wide shade range"],
+    "rating": 4.0,
+    "inStock": true
+  },
+  {
+    "id": "home-kettle-prestige",
+    "name": "Prestige Electric Kettle 1.7L",
+    "category": "Home",
+    "brand": "Prestige",
+    "description": "Stainless steel electric kettle with auto shut-off, boil-dry protection and fast boiling.",
+    "basePrice": 1499,
+    "images": ["https://images.unsplash.com/photo-1585771724684-38269b663e63?w=800&q=80"],
+    "variants": [
+      { "id": "v-steel", "name": "Stainless Steel", "sku": "PR-KET-17", "price": 1499, "inStock": true, "attributes": { "colour": "Steel" } }
+    ],
+    "specifications": { "Capacity": "1.7L", "Power": "1500W", "Material": "Stainless steel", "Warranty": "1 year" },
+    "features": ["Auto shut-off", "Concealed heating element", "360° swivel base"],
+    "rating": 4.2,
+    "inStock": true
+  },
+  {
+    "id": "home-flask-milton",
+    "name": "Milton Thermosteel Duo Flask 1L",
+    "category": "Home",
+    "brand": "Milton",
+    "description": "Vacuum insulated flask keeps beverages hot for 24 hours and cold for 24 hours.",
+    "basePrice": 899,
+    "images": ["https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=800&q=80"],
+    "variants": [
+      { "id": "v-silver", "name": "Silver", "sku": "MIL-FLASK-1", "price": 899, "inStock": true, "attributes": { "colour": "Silver" } },
+      { "id": "v-black", "name": "Black", "sku": "MIL-FLASK-1B", "price": 949, "inStock": true, "attributes": { "colour": "Black" } }
+    ],
+    "specifications": { "Capacity": "1 litre", "Insulation": "Double wall vacuum", "Material": "Stainless steel", "Leak proof": "Yes" },
+    "features": ["24h hot/cold retention", "Rust proof", "Easy pour"],
+    "rating": 4.4,
+    "inStock": true
+  },
+  {
+    "id": "home-lamp-philips",
+    "name": "Philips LED Study Table Lamp",
+    "category": "Home",
+    "brand": "Philips",
+    "description": "Adjustable LED desk lamp with three brightness levels and eye-comfort light for reading and work.",
+    "basePrice": 2199,
+    "images": ["https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=800&q=80"],
+    "variants": [
+      { "id": "v-white", "name": "White", "sku": "PH-LAMP-W", "price": 2199, "inStock": true, "attributes": { "colour": "White" } }
+    ],
+    "specifications": { "Wattage": "5W LED", "Brightness levels": "3", "Colour temperature": "4000K", "Flex arm": "Yes" },
+    "features": ["Flicker-free light", "Energy efficient", "Touch control"],
+    "rating": 4.3,
+    "inStock": true
+  },
+  {
+    "id": "lifestyle-band-mi",
+    "name": "Mi Smart Band 8",
+    "category": "Lifestyle",
+    "brand": "Mi",
+    "description": "Fitness tracker with AMOLED display, 150+ sports modes, SpO2 monitoring and 16-day battery.",
+    "basePrice": 2799,
+    "images": ["https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=800&q=80"],
+    "variants": [
+      { "id": "v-graphite", "name": "Graphite Black", "sku": "MI-BAND8-BLK", "price": 2799, "inStock": true, "attributes": { "colour": "Graphite Black" } },
+      { "id": "v-orange", "name": "Light Orange", "sku": "MI-BAND8-ORG", "price": 2799, "inStock": true, "attributes": { "colour": "Light Orange" } }
+    ],
+    "specifications": { "Display": "1.62\" AMOLED", "Battery": "16 days", "Water resistance": "5 ATM", "GPS": "Connected GPS" },
+    "features": ["Sleep tracking", "Heart rate monitor", "Always-on display option"],
+    "rating": 4.5,
+    "inStock": true
+  },
+  {
+    "id": "lifestyle-backpack-wildcraft",
+    "name": "Wildcraft Anti-Theft Laptop Backpack",
+    "category": "Lifestyle",
+    "brand": "Wildcraft",
+    "description": "Durable 35L backpack with padded laptop sleeve, hidden zippers and ergonomic shoulder straps.",
+    "basePrice": 2499,
+    "images": ["https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&q=80"],
+    "variants": [
+      { "id": "v-black", "name": "Black", "sku": "WC-BAG-BLK", "price": 2499, "inStock": true, "attributes": { "colour": "Black" } },
+      { "id": "v-navy", "name": "Navy", "sku": "WC-BAG-NVY", "price": 2499, "inStock": true, "attributes": { "colour": "Navy" } }
+    ],
+    "specifications": { "Capacity": "35L", "Laptop fit": "Up to 15.6\"", "Material": "Polyester", "Weight": "0.9kg" },
+    "features": ["Anti-theft design", "USB charging port", "Rain cover included"],
+    "rating": 4.4,
+    "inStock": true
+  },
+  {
+    "id": "lifestyle-earbuds-boat",
+    "name": "boAt Airdopes 131 Bluetooth Earbuds",
+    "category": "Lifestyle",
+    "brand": "boAt",
+    "description": "True wireless earbuds with Insta Wake N Pair, 13mm drivers and up to 60 hours playback with case.",
+    "basePrice": 999,
+    "images": ["https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=800&q=80"],
+    "variants": [
+      { "id": "v-active-black", "name": "Active Black", "sku": "BOAT-131-BLK", "price": 999, "inStock": true, "attributes": { "colour": "Active Black" } },
+      { "id": "v-white", "name": "Pearl White", "sku": "BOAT-131-WHT", "price": 999, "inStock": true, "attributes": { "colour": "Pearl White" } }
+    ],
+    "specifications": { "Driver": "13mm", "Playback": "60h with case", "Bluetooth": "5.0", "IP rating": "IPX4" },
+    "features": ["Touch controls", "Voice assistant", "ASAP charge"],
+    "rating": 4.0,
+    "inStock": true
+  }
+]

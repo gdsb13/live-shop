@@ -1,0 +1,2 @@
+# Keep shell scripts executable on WSL/Linux (avoid bash\r shebang errors).
+*.sh text eol=lf

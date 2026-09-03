@@ -1,0 +1,16 @@
+{
+  "name": "live-shop",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "install:app": "bash ./scripts/install.sh",
+    "start:app": "bash ./scripts/start.sh",
+    "stop:app": "bash ./scripts/stop.sh",
+    "status:app": "bash ./scripts/status.sh",
+    "test:phase3": "bash ./scripts/test-phase3.sh",
+    "test:phase4": "bash ./scripts/test-phase4.sh"
+  }
+}

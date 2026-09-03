@@ -1,0 +1,14 @@
+node_modules
+dist
+.next
+.turbo
+*.log
+.env
+.env.local
+.env*.local
+!.env.example
+.DS_Store
+coverage
+logs
+run
+.tmp-run-user-cmd.sh
