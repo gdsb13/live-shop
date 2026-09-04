@@ -50,6 +50,23 @@ function buildSystemPrompt(sessionContext) {
         `Featured product hint: ${sessionContext.liveContext.featuredProduct.name} (${sessionContext.liveContext.featuredProduct.id}).`,
       );
     }
+    if (Array.isArray(sessionContext.liveContext.productIds) && sessionContext.liveContext.productIds.length) {
+      lines.push(`Session products: ${sessionContext.liveContext.productIds.join(', ')}.`);
+    }
+  }
+
+  if (sessionContext.surface === 'recorded' && sessionContext.liveContext) {
+    lines.push(
+      `Recorded session replay: ${sessionContext.liveContext.title} (status: ${sessionContext.liveContext.status}). The live event is not active.`,
+    );
+    if (sessionContext.liveContext.featuredProduct) {
+      lines.push(
+        `Featured product hint: ${sessionContext.liveContext.featuredProduct.name} (${sessionContext.liveContext.featuredProduct.id}).`,
+      );
+    }
+    if (Array.isArray(sessionContext.liveContext.productIds) && sessionContext.liveContext.productIds.length) {
+      lines.push(`Session products: ${sessionContext.liveContext.productIds.join(', ')}.`);
+    }
   }
 
   if (sessionContext.productId) {

@@ -90,7 +90,7 @@ export default function LiveDiscoveryPage() {
             <div className="live-section">
               <div className="section-heading">
                 <h2>Watch again</h2>
-                <p>Recorded sessions — playback arrives in a later phase</p>
+                <p>Recorded sessions you can replay anytime</p>
               </div>
               {data.ended.length === 0 ? (
                 <div className="empty-state panel">No recorded sessions yet.</div>

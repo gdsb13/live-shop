@@ -6,6 +6,13 @@ const catalogService = require('./catalogService');
 
 const seedPath = path.join(__dirname, '../data/liveSessions.json');
 
+// POC: local demo replay served from apps/web/public/replay/demo.mp4 (not the host's RTC stream).
+const POC_LOCAL_REPLAY_URL = '/replay/demo.mp4';
+
+function pocRecordingUrlForSession(_sessionId) {
+  return POC_LOCAL_REPLAY_URL;
+}
+
 // Mutable in-memory sessions. API restart resets to seed.
 // Authoritative status (SCHEDULED | LIVE | ENDED) is host-driven only.
 // SCHEDULED: host has not gone live. LIVE: set via startSession after successful
@@ -114,6 +121,11 @@ function endSession(id) {
 
   session.status = 'ENDED';
   session.endedAt = new Date().toISOString();
+
+  // POC: host-ended sessions get a demo replay URL when Cloud Recording is not wired up.
+  if (!session.recordingUrl) {
+    session.recordingUrl = pocRecordingUrlForSession(id);
+  }
 
   require('./hostClaimService').clearSession(id);
 

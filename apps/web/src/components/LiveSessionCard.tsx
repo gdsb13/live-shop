@@ -5,10 +5,10 @@ import Link from 'next/link';
 import type { LiveSession } from '@/lib/types';
 import { formatSessionDate } from '@/lib/format';
 
-function statusLabel(status: LiveSession['status']) {
+function statusLabel(status: LiveSession['status'], recordingUrl: string | null) {
   if (status === 'LIVE') return 'Live now';
   if (status === 'SCHEDULED') return 'Upcoming';
-  return 'Recorded';
+  return recordingUrl ? 'Watch again' : 'Ended';
 }
 
 export function LiveSessionCard({ session }: { session: LiveSession }) {
@@ -25,7 +25,7 @@ export function LiveSessionCard({ session }: { session: LiveSession }) {
         <img src={thumb} alt="" onError={() => setImgError(true)} />
         <span className={`live-status-pill ${session.status.toLowerCase()}`}>
           {session.status === 'LIVE' && <span className="live-dot" />}
-          {statusLabel(session.status)}
+          {statusLabel(session.status, session.recordingUrl)}
         </span>
       </div>
       <div className="live-session-body">

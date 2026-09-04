@@ -51,6 +51,48 @@ router.post('/:id/chat/messages', (req, res, next) => {
   }
 });
 
+// Same-origin replay stream (proxies demo/recording URL with Range support for HTML5 video).
+router.get('/:id/recording', async (req, res, next) => {
+  try {
+    const session = liveSessionService.getRawSessionById(req.params.id);
+    if (!session?.recordingUrl) {
+      res.status(404).json({ error: 'Recording not found' });
+      return;
+    }
+
+    const upstreamHeaders = {};
+    if (req.headers.range) {
+      upstreamHeaders.Range = req.headers.range;
+    }
+
+    const upstream = await fetch(session.recordingUrl, { headers: upstreamHeaders });
+    if (!upstream.ok && upstream.status !== 206) {
+      res.status(502).json({ error: 'Could not fetch recording asset' });
+      return;
+    }
+
+    res.status(upstream.status);
+    for (const name of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
+      const value = upstream.headers.get(name);
+      if (value) res.setHeader(name, value);
+    }
+    if (!res.getHeader('content-type')) {
+      res.setHeader('Content-Type', 'video/mp4');
+    }
+
+    if (!upstream.body) {
+      res.end();
+      return;
+    }
+
+    const { Readable } = require('stream');
+    const { pipeline } = require('stream/promises');
+    await pipeline(Readable.fromWeb(upstream.body), res);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/:id', (req, res, next) => {
   try {
     const session = liveSessionService.getSessionById(req.params.id);

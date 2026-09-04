@@ -1,4 +1,4 @@
-export type VoiceAssistantSurface = 'storefront' | 'live' | 'product';
+export type VoiceAssistantSurface = 'storefront' | 'live' | 'recorded' | 'product';
 
 export type VoiceAssistantState =
   | 'idle'

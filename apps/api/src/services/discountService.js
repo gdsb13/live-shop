@@ -67,6 +67,8 @@ function evaluateLineItem({ unitPrice, quantity = 1, productId, originatingLiveS
 }
 
 function trustedLiveSessionId(sessionContext) {
+  // Only active LIVE Voice AI surface may attach originatingLiveSessionId for cart adds.
+  // Recorded/replay uses surface 'recorded' — discount policy still requires session LIVE.
   if (!sessionContext || sessionContext.surface !== 'live') {
     return null;
   }

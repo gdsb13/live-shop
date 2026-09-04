@@ -53,7 +53,7 @@
     "productIds": ["apparel-shoes-nike", "lifestyle-band-mi"],
     "featuredProductId": "apparel-shoes-nike",
     "thumbnail": "https://picsum.photos/seed/live-running-gear/800/450",
-    "recordingUrl": "https://example.com/recordings/live-running-gear.mp4"
+    "recordingUrl": "/replay/demo.mp4"
   },
   {
     "id": "live-kitchen-replay",
@@ -67,6 +67,6 @@
     "productIds": ["home-kettle-prestige", "home-flask-milton"],
     "featuredProductId": "home-kettle-prestige",
     "thumbnail": "https://picsum.photos/seed/live-kitchen-replay/800/450",
-    "recordingUrl": "https://example.com/recordings/live-kitchen-replay.mp4"
+    "recordingUrl": "/replay/demo.mp4"
   }
 ]

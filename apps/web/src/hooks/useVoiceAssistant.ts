@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
 import { allocateVoiceShopperRtcUid, voiceShopperUserId } from '@/lib/agora/identity';
 import { setLiveAudioDucked } from '@/lib/liveAudioBridge';
+import { setReplayAudioDucked } from '@/lib/replayAudioBridge';
 import {
   createVoiceRtmClient,
   initVoiceAiToolkit,
@@ -19,10 +20,18 @@ import type {
 } from '@/lib/voice/types';
 import type { Cart } from '@/lib/types';
 
-function deriveContext(pathname: string) {
+async function resolveContext(pathname: string) {
   const liveMatch = pathname.match(/^\/live\/([^/]+)$/);
   if (liveMatch) {
-    return { surface: 'live' as VoiceAssistantSurface, liveSessionId: liveMatch[1] };
+    const liveSessionId = liveMatch[1];
+    const session = await api.getLiveSession(liveSessionId);
+    if (session.status === 'LIVE') {
+      return { surface: 'live' as VoiceAssistantSurface, liveSessionId };
+    }
+    if (session.status === 'ENDED' || session.status === 'SCHEDULED') {
+      return { surface: 'recorded' as VoiceAssistantSurface, liveSessionId };
+    }
+    return { surface: 'recorded' as VoiceAssistantSurface, liveSessionId };
   }
   const productMatch = pathname.match(/^\/products\/([^/]+)$/);
   if (productMatch) {
@@ -166,6 +175,7 @@ export function useVoiceAssistant() {
       setNotice('');
       await cleanupVoiceStack();
       setLiveAudioDucked(false);
+      setReplayAudioDucked(false);
       setPollSessionId('');
       sessionIdRef.current = '';
     },
@@ -176,6 +186,7 @@ export function useVoiceAssistant() {
     activeRef.current = false;
     await cleanupVoiceStack();
     setLiveAudioDucked(false);
+    setReplayAudioDucked(false);
 
     const sessionId = sessionIdRef.current;
     const shopperUserId = shopperUserIdRef.current;
@@ -332,7 +343,7 @@ export function useVoiceAssistant() {
       applyCartRef.current = applyCart ?? null;
       agentUidRef.current = null;
 
-      const context = deriveContext(pathname);
+      const context = await resolveContext(pathname);
       const shopperUserId = shopperUserIdRef.current;
       shopperRtcUidRef.current = allocateVoiceShopperRtcUid();
 
@@ -350,6 +361,8 @@ export function useVoiceAssistant() {
 
         if (context.surface === 'live') {
           setLiveAudioDucked(true);
+        } else if (context.surface === 'recorded') {
+          setReplayAudioDucked(true);
         }
 
         setTranscripts([
@@ -379,6 +392,7 @@ export function useVoiceAssistant() {
         activeRef.current = false;
         await cleanupVoiceStack();
         setLiveAudioDucked(false);
+        setReplayAudioDucked(false);
         sessionIdRef.current = '';
         setPollSessionId('');
         setState('error');

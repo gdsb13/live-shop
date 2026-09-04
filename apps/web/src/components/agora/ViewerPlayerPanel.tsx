@@ -1,13 +1,18 @@
 'use client';
 
 import { useViewerPlayer } from '@/hooks/useViewerPlayer';
+import { ReplayPlayerPanel } from '@/components/agora/ReplayPlayerPanel';
 
 export function ViewerPlayerPanel({
   sessionId,
   sessionStatus,
+  recordingUrl,
+  sessionTitle,
 }: {
   sessionId: string;
   sessionStatus: string;
+  recordingUrl?: string | null;
+  sessionTitle?: string;
 }) {
   const { videoRef, state, statusText } = useViewerPlayer(sessionId, sessionStatus);
 
@@ -23,11 +28,20 @@ export function ViewerPlayerPanel({
   }
 
   if (sessionStatus === 'ENDED') {
+    if (recordingUrl) {
+      return (
+        <ReplayPlayerPanel
+          sessionId={sessionId}
+          recordingUrl={recordingUrl}
+          title={sessionTitle || 'Recorded session'}
+        />
+      );
+    }
     return (
       <div className="agora-panel panel media-placeholder">
         <div className="media-placeholder-inner">
           <span className="media-placeholder-label">Session ended</span>
-          <p>Live video has ended. Recorded playback arrives in a later phase.</p>
+          <p>Live video has ended. No recording is available for this session yet.</p>
         </div>
       </div>
     );

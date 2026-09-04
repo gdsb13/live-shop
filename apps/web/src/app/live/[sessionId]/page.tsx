@@ -146,7 +146,12 @@ export default function LiveSessionPage() {
 
         <div className="live-view-grid">
           <div className="live-main-column">
-            <ViewerPlayerPanel sessionId={session.id} sessionStatus={session.status} />
+            <ViewerPlayerPanel
+              sessionId={session.id}
+              sessionStatus={session.status}
+              recordingUrl={session.recordingUrl}
+              sessionTitle={session.title}
+            />
 
             <div className="live-session-header panel">
               <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -156,10 +161,16 @@ export default function LiveSessionPage() {
                 </div>
                 <span className={`live-status-pill large ${session.status.toLowerCase()}`}>
                   {session.status === 'LIVE' && <span className="live-dot" />}
-                  {session.status}
+                  {session.status === 'ENDED' && session.recordingUrl ? 'RECORDED' : session.status}
                 </span>
               </div>
               <p>{session.description}</p>
+              {session.status === 'ENDED' && session.recordingUrl && (
+                <p className="replay-session-note">
+                  Watch Again — recorded session replay. Live-only discounts are not available; use Voice AI
+                  to explore products and add to cart at regular prices.
+                </p>
+              )}
             </div>
 
             {session.featuredProduct && (
@@ -193,6 +204,9 @@ export default function LiveSessionPage() {
                     {session.status === 'LIVE' && (
                       <p className="live-benefit-note">20% LIVE session discount applies at checkout for session products.</p>
                     )}
+                    {session.status === 'ENDED' && (
+                      <p className="replay-price-note">Regular price — live session discount has ended.</p>
+                    )}
                     <div className="row" style={{ marginTop: 16 }}>
                       <Link
                         href={
@@ -208,9 +222,9 @@ export default function LiveSessionPage() {
                         className="button"
                         type="button"
                         onClick={handleAddFeatured}
-                        disabled={adding || !defaultVariantId || session.status === 'ENDED'}
+                        disabled={adding || !defaultVariantId}
                       >
-                        {adding ? 'Adding…' : 'Add to cart'}
+                        {adding ? 'Adding…' : session.status === 'ENDED' ? 'Add to cart (full price)' : 'Add to cart'}
                       </button>
                     </div>
                     {message && <div className="message success" style={{ marginTop: 12 }}>{message}</div>}
