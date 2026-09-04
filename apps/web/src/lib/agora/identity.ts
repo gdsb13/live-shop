@@ -45,3 +45,17 @@ export function setSessionChatName(sessionId: string, name: string, isHost = fal
 export function voiceShopperUserId() {
   return `shopper-ai-${getPageClientId()}`;
 }
+
+/** Numeric Agora RTC UID for private Voice AI (stable per tab). ConvoAI requires numeric UIDs. */
+export function voiceShopperRtcUid(): number {
+  if (typeof window === 'undefined') return 100001;
+  const key = `voice-ai-rtc-uid-${getPageClientId()}`;
+  const stored = window.sessionStorage.getItem(key);
+  if (stored) {
+    const parsed = Number(stored);
+    if (Number.isInteger(parsed) && parsed > 0) return parsed;
+  }
+  const uid = Math.floor(100000 + Math.random() * 899999999);
+  window.sessionStorage.setItem(key, String(uid));
+  return uid;
+}

@@ -13,8 +13,8 @@ const STATE_LABELS: Record<string, string> = {
 };
 
 export function VoiceAssistantPanel() {
-  const { refreshCart } = useCart();
-  const { open, state, error, notice, transcripts, startAssistant, stopAssistant, setOpen } =
+  const { refreshCart, applyCart } = useCart();
+  const { open, state, error, notice, transcripts, audioAnchorRef, startAssistant, stopAssistant, setOpen } =
     useVoiceAssistant();
 
   if (!open && state === 'idle') {
@@ -22,7 +22,7 @@ export function VoiceAssistantPanel() {
       <button
         type="button"
         className="voice-ai-fab"
-        onClick={() => startAssistant(refreshCart)}
+        onClick={() => startAssistant(refreshCart, applyCart)}
         aria-label="Ask AI shopping assistant"
       >
         Ask AI
@@ -58,13 +58,15 @@ export function VoiceAssistantPanel() {
         )}
       </div>
 
+      <div ref={audioAnchorRef} className="voice-ai-panel__audio" aria-hidden="true" />
+
       {state === 'error' ? (
         <button
           type="button"
           className="voice-ai-panel__retry"
           onClick={() => {
             setOpen(false);
-            startAssistant(refreshCart);
+            startAssistant(refreshCart, applyCart);
           }}
         >
           Try again

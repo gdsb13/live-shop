@@ -6,7 +6,8 @@ const AI_TOOL_DEFINITIONS = [
     type: 'function',
     function: {
       name: 'searchProducts',
-      description: 'Search the store catalogue by keyword, category, or feature.',
+      description:
+        'Search the store catalogue by keyword, category, or synonym (mobile/phone, earbuds/headphones, laptop/computer, shirt/formal wear).',
       parameters: {
         type: 'object',
         properties: {
@@ -74,15 +75,28 @@ const AI_TOOL_DEFINITIONS = [
   {
     type: 'function',
     function: {
+      name: 'getCart',
+      description: 'Read the shopper current cart contents and totals.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'getCurrentPrice',
-      description: 'Get authoritative price for a product variant in INR.',
+      description:
+        'Get authoritative price for a product variant in INR. variantId is optional — uses the default in-stock variant when omitted.',
       parameters: {
         type: 'object',
         properties: {
           productId: { type: 'string' },
-          variantId: { type: 'string' },
+          variantId: {
+            type: 'string',
+            description:
+              'Exact variant id from getProduct (e.g. v-black, v-55). Optional; defaults to defaultVariantId.',
+          },
         },
-        required: ['productId', 'variantId'],
+        required: ['productId'],
       },
     },
   },
@@ -90,15 +104,19 @@ const AI_TOOL_DEFINITIONS = [
     type: 'function',
     function: {
       name: 'addToCart',
-      description: 'Add a product variant to the shopper cart.',
+      description:
+        'Add a product to the shopper cart. REQUIRED when they say add, buy, go on, yes please, or confirm after you offered to add. productId and variantId are optional if a product was just discussed — defaults apply.',
       parameters: {
         type: 'object',
         properties: {
           productId: { type: 'string' },
-          variantId: { type: 'string' },
+          variantId: {
+            type: 'string',
+            description:
+              'Exact variant id from getProduct (e.g. v-black, v-55). Optional; defaults to defaultVariantId.',
+          },
           quantity: { type: 'integer', minimum: 1, maximum: 10 },
         },
-        required: ['productId', 'variantId'],
       },
     },
   },

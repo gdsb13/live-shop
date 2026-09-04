@@ -19,6 +19,13 @@ function pickDefaultVariant(product) {
   return product.variants.find((variant) => variant.inStock) || product.variants[0] || null;
 }
 
+function resolveProductVariant(product, variantHint) {
+  if (!product) return null;
+  const resolved = catalogService.resolveVariant(product, variantHint);
+  if (resolved) return resolved;
+  return pickDefaultVariant(product);
+}
+
 function searchProducts({ query, category }) {
   const products = catalogService.listProducts({
     search: query || undefined,
@@ -40,6 +47,7 @@ function getProduct({ productId }) {
     category: product.category,
     description: product.description,
     rating: product.rating,
+    variantCount: product.variants.length,
     specifications: product.specifications,
     features: product.features,
     variants: product.variants.map((variant) => ({
@@ -69,10 +77,27 @@ function getPaymentOptions() {
   return paymentOptionsService.listPaymentOptions();
 }
 
+function getCart() {
+  const cart = cartService.getCart();
+  return {
+    itemCount: cart.itemCount,
+    subtotal: cart.subtotal,
+    currency: cart.currency,
+    items: cart.items.map((item) => ({
+      productId: item.productId,
+      productName: item.productName,
+      variantId: item.variantId,
+      variantName: item.variantName,
+      quantity: item.quantity,
+      lineTotal: item.lineTotal,
+    })),
+  };
+}
+
 function getCurrentPrice({ productId, variantId }) {
   const product = catalogService.getProductById(productId);
   if (!product) throw httpError('Product not found', 404);
-  const variant = catalogService.getVariant(product, variantId);
+  const variant = resolveProductVariant(product, variantId);
   if (!variant) throw httpError('Variant not found', 404);
   return {
     productId: product.id,
@@ -82,15 +107,25 @@ function getCurrentPrice({ productId, variantId }) {
     currency: 'INR',
     price: variant.price,
     inStock: variant.inStock,
+    resolvedFromHint: variantId && variant.id !== variantId ? variant.id : undefined,
   };
 }
 
 function addToCart({ productId, variantId, quantity = 1 }) {
-  const cart = cartService.addItem({ productId, variantId, quantity });
-  // Cart mutation succeeded; caller can notify the frontend to refresh visible cart.
+  const product = catalogService.getProductById(productId);
+  if (!product) throw httpError('Product not found', 404);
+  const variant = resolveProductVariant(product, variantId);
+  if (!variant) throw httpError('Variant not found', 404);
+  const cart = cartService.addItem({
+    productId,
+    variantId: variant.id,
+    quantity,
+  });
   return {
     success: true,
-    message: 'Item added to cart',
+    message: `Added ${product.name} (${variant.name}) to your cart`,
+    variantId: variant.id,
+    resolvedFromHint: variantId && variant.id !== variantId ? variant.id : undefined,
     cart: {
       itemCount: cart.itemCount,
       subtotal: cart.subtotal,
@@ -166,6 +201,8 @@ function executeTool(toolName, args, sessionContext = {}) {
       return checkServiceability(input);
     case 'getPaymentOptions':
       return getPaymentOptions();
+    case 'getCart':
+      return getCart();
     case 'getCurrentPrice':
       return getCurrentPrice(input);
     case 'addToCart':
@@ -185,6 +222,7 @@ module.exports = {
   compareProducts,
   checkServiceability,
   getPaymentOptions,
+  getCart,
   getCurrentPrice,
   addToCart,
   removeFromCart,

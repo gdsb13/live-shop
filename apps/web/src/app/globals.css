@@ -1040,6 +1040,14 @@ img {
   padding: 12px 16px;
 }
 
+.voice-ai-panel__audio {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .voice-ai-panel__placeholder {
   margin: 0;
   color: var(--text-muted);

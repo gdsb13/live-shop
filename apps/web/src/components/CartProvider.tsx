@@ -15,6 +15,7 @@ type CartContextValue = {
   cart: Cart | null;
   loading: boolean;
   refreshCart: () => Promise<void>;
+  applyCart: (next: Cart) => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -42,13 +43,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const applyCart = useCallback((next: Cart) => {
+    setCart(next);
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
     refreshCart();
   }, [refreshCart]);
 
   const value = useMemo(
-    () => ({ cart, loading, refreshCart }),
-    [cart, loading, refreshCart],
+    () => ({ cart, loading, refreshCart, applyCart }),
+    [applyCart, cart, loading, refreshCart],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

@@ -3,40 +3,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
-import { voiceShopperUserId } from '@/lib/agora/identity';
+import { voiceShopperRtcUid, voiceShopperUserId } from '@/lib/agora/identity';
 import { setLiveAudioDucked } from '@/lib/liveAudioBridge';
-import { speakText, stopSpeaking } from '@/lib/voice/speech';
+import {
+  createVoiceRtmClient,
+  initVoiceAiToolkit,
+  playRemoteAudioTrack,
+  releaseVoiceRtmClient,
+  type VoiceAiRuntime,
+} from '@/lib/voice/voiceAiClient';
 import type {
   VoiceAssistantState,
   VoiceAssistantSurface,
   VoiceTranscriptLine,
 } from '@/lib/voice/types';
+import type { Cart } from '@/lib/types';
 
-type SpeechRecognitionType = {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start: () => void;
-  stop: () => void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: { error?: string }) => void) | null;
-  onend: (() => void) | null;
-};
-
-type SpeechRecognitionEvent = {
-  results: ArrayLike<{ 0: { transcript: string } }>;
-};
-
-function getSpeechRecognitionCtor():
-  | (new () => SpeechRecognitionType)
-  | undefined {
-  if (typeof window === 'undefined') return undefined;
-  const win = window as Window & {
-    SpeechRecognition?: new () => SpeechRecognitionType;
-    webkitSpeechRecognition?: new () => SpeechRecognitionType;
-  };
-  return win.SpeechRecognition || win.webkitSpeechRecognition;
-}
+const GREETING_MIC_MUTE_MS = 5000;
 
 function deriveContext(pathname: string) {
   const liveMatch = pathname.match(/^\/live\/([^/]+)$/);
@@ -50,29 +33,121 @@ function deriveContext(pathname: string) {
   return { surface: 'storefront' as VoiceAssistantSurface };
 }
 
+function isAgentRemoteUser(
+  remoteUid: string | number,
+  agentUid: number | null,
+  shopperRtcUid: number,
+) {
+  const uid = Number(remoteUid);
+  if (uid === shopperRtcUid) return false;
+  if (agentUid && uid === agentUid) return true;
+  return !agentUid;
+}
+
+function compactTranscriptText(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function isIncrementalTranscript(prev: string, next: string): boolean {
+  const previous = compactTranscriptText(prev);
+  const incoming = compactTranscriptText(next);
+  if (!previous || !incoming) return false;
+  if (previous === incoming) return true;
+  return incoming.startsWith(previous) || previous.startsWith(incoming);
+}
+
+function coalesceTranscriptLines(lines: VoiceTranscriptLine[]): VoiceTranscriptLine[] {
+  const next: VoiceTranscriptLine[] = [];
+  for (const line of lines) {
+    if (!line.text?.trim()) continue;
+    const last = next[next.length - 1];
+    if (last && last.role === line.role && isIncrementalTranscript(last.text, line.text)) {
+      const keepLonger = line.text.length >= last.text.length ? line : last;
+      next[next.length - 1] = {
+        role: line.role,
+        text: keepLonger.text,
+        ts: line.ts || last.ts,
+      };
+      continue;
+    }
+    const key = `${line.role}:${compactTranscriptText(line.text)}`;
+    if (next.some((entry) => `${entry.role}:${compactTranscriptText(entry.text)}` === key)) {
+      continue;
+    }
+    next.push(line);
+  }
+  return next;
+}
+
+function mergeTranscripts(
+  current: VoiceTranscriptLine[],
+  incoming: VoiceTranscriptLine[],
+): VoiceTranscriptLine[] {
+  if (!incoming.length) return current;
+  const next = current.slice();
+  for (const line of coalesceTranscriptLines(incoming)) {
+    const last = next[next.length - 1];
+    if (last && last.role === line.role && isIncrementalTranscript(last.text, line.text)) {
+      const keepLonger = line.text.length >= last.text.length ? line : last;
+      next[next.length - 1] = {
+        role: line.role,
+        text: keepLonger.text,
+        ts: line.ts || last.ts,
+      };
+      continue;
+    }
+    const key = `${line.role}:${compactTranscriptText(line.text)}`;
+    if (next.some((entry) => `${entry.role}:${compactTranscriptText(entry.text)}` === key)) {
+      continue;
+    }
+    next.push(line);
+  }
+  return next.slice(-40);
+}
+
 export function useVoiceAssistant() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [pollSessionId, setPollSessionId] = useState('');
   const [state, setState] = useState<VoiceAssistantState>('idle');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [transcripts, setTranscripts] = useState<VoiceTranscriptLine[]>([]);
   const sessionIdRef = useRef('');
   const shopperUserIdRef = useRef(voiceShopperUserId());
+  const shopperRtcUidRef = useRef(voiceShopperRtcUid());
+  const agentUidRef = useRef<number | null>(null);
   const rtcClientRef = useRef<import('agora-rtc-sdk-ng').IAgoraRTCClient | null>(null);
   const micTrackRef = useRef<import('agora-rtc-sdk-ng').ILocalAudioTrack | null>(null);
-  const recognitionRef = useRef<SpeechRecognitionType | null>(null);
-  const modeRef = useRef<'agora' | 'local'>('local');
+  const voiceAiRuntimeRef = useRef<VoiceAiRuntime | null>(null);
+  const audioAnchorRef = useRef<HTMLDivElement | null>(null);
+  const unmuteTimerRef = useRef<number | null>(null);
   const activeRef = useRef(false);
-  const busyRef = useRef(false);
   const cartRefreshRef = useRef<(() => Promise<void>) | null>(null);
+  const applyCartRef = useRef<((cart: Cart) => void) | null>(null);
 
-  const cleanupRtc = useCallback(async () => {
+  const cleanupVoiceStack = useCallback(async () => {
+    if (unmuteTimerRef.current) {
+      window.clearTimeout(unmuteTimerRef.current);
+      unmuteTimerRef.current = null;
+    }
+
+    const voiceAiRuntime = voiceAiRuntimeRef.current;
+    voiceAiRuntimeRef.current = null;
+    if (voiceAiRuntime) {
+      await voiceAiRuntime.destroy();
+    } else {
+      await releaseVoiceRtmClient();
+    }
+
     micTrackRef.current?.stop();
     micTrackRef.current?.close();
     micTrackRef.current = null;
+
     const client = rtcClientRef.current;
     rtcClientRef.current = null;
+    agentUidRef.current = null;
+
     if (client) {
       try {
         await client.leave();
@@ -82,26 +157,30 @@ export function useVoiceAssistant() {
     }
   }, []);
 
-  const stopRecognition = useCallback(() => {
-    const recognition = recognitionRef.current;
-    if (!recognition) return;
-    recognition.onend = null;
-    recognition.onresult = null;
-    recognition.stop();
-    recognitionRef.current = null;
-  }, []);
+  const handleSessionEnded = useCallback(
+    async (message: string) => {
+      if (!activeRef.current) return;
+      activeRef.current = false;
+      setError(message);
+      setState('error');
+      setNotice('');
+      await cleanupVoiceStack();
+      setLiveAudioDucked(false);
+      setPollSessionId('');
+      sessionIdRef.current = '';
+    },
+    [cleanupVoiceStack],
+  );
 
   const stopAssistant = useCallback(async () => {
     activeRef.current = false;
-    busyRef.current = false;
-    stopRecognition();
-    stopSpeaking();
-    await cleanupRtc();
+    await cleanupVoiceStack();
     setLiveAudioDucked(false);
 
     const sessionId = sessionIdRef.current;
     const shopperUserId = shopperUserIdRef.current;
     sessionIdRef.current = '';
+    setPollSessionId('');
 
     if (sessionId) {
       try {
@@ -113,158 +192,143 @@ export function useVoiceAssistant() {
 
     setState('idle');
     setOpen(false);
-  }, [cleanupRtc, stopRecognition]);
+  }, [cleanupVoiceStack]);
 
-  const speakLocal = useCallback((text: string, onComplete?: () => void) => {
-    busyRef.current = true;
-    stopRecognition();
-    setState('speaking');
-    speakText(text, () => {
-      busyRef.current = false;
-      if (activeRef.current) {
-        setState('listening');
-        onComplete?.();
-      }
-    });
-  }, [stopRecognition]);
-
-  const handleLocalTurn = useCallback(
-    async (text: string) => {
-      if (!sessionIdRef.current || busyRef.current) return;
-      busyRef.current = true;
-      stopRecognition();
-      setState('thinking');
-      try {
-        const result = await api.sendVoiceAiLocalTurn({
-          sessionId: sessionIdRef.current,
-          text,
-        });
-        setTranscripts(result.transcripts);
-        if (result.cartUpdated) {
-          await cartRefreshRef.current?.();
+  const subscribeAgentAudio = useCallback(
+    async (client: import('agora-rtc-sdk-ng').IAgoraRTCClient) => {
+      for (const remoteUser of client.remoteUsers) {
+        if (!remoteUser.hasAudio) continue;
+        if (
+          !isAgentRemoteUser(remoteUser.uid, agentUidRef.current, shopperRtcUidRef.current)
+        ) {
+          continue;
         }
-        speakLocal(result.reply, () => {
-          if (result.endSession) {
-            stopAssistant().catch(() => undefined);
-            return;
-          }
-          if (activeRef.current) startListeningRef.current();
-        });
-      } catch (err) {
-        busyRef.current = false;
-        setError(err instanceof Error ? err.message : 'Voice turn failed');
-        setState('error');
+        await client.subscribe(remoteUser, 'audio');
+        if (activeRef.current) setState('speaking');
+        await playRemoteAudioTrack(remoteUser.audioTrack, audioAnchorRef.current);
       }
     },
-    [speakLocal, stopRecognition, stopAssistant],
+    [],
   );
-
-  const startListeningRef = useRef<() => void>(() => undefined);
-
-  startListeningRef.current = () => {
-    if (!activeRef.current || busyRef.current || modeRef.current !== 'local') return;
-
-    const Ctor = getSpeechRecognitionCtor();
-    if (!Ctor) {
-      setError('Speech recognition is not supported in this browser. Try Chrome or Edge.');
-      setState('error');
-      return;
-    }
-
-    stopRecognition();
-
-    const recognition = new Ctor();
-    recognition.lang = 'en-IN';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-
-    recognition.onresult = (event) => {
-      const text = event.results[0][0].transcript.trim();
-      if (!text || busyRef.current) return;
-      setTranscripts((prev) => [
-        ...prev,
-        { role: 'user', text, ts: new Date().toISOString() },
-      ]);
-      handleLocalTurn(text).catch((err: Error) => {
-        setError(err.message);
-        setState('error');
-      });
-    };
-
-    recognition.onerror = (event) => {
-      if (!activeRef.current || busyRef.current) return;
-      const code = event.error || '';
-      if (code === 'aborted' || code === 'no-speech') {
-        window.setTimeout(() => {
-          if (activeRef.current && !busyRef.current) startListeningRef.current();
-        }, 400);
-        return;
-      }
-      setState('listening');
-    };
-
-    recognition.onend = () => {
-      if (!activeRef.current || busyRef.current) return;
-      window.setTimeout(() => {
-        if (activeRef.current && !busyRef.current && !recognitionRef.current) {
-          startListeningRef.current();
-        }
-      }, 400);
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-    setState('listening');
-  };
 
   const connectAgoraRtc = useCallback(
     async (startPayload: import('@/lib/voice/types').VoiceSessionStart) => {
       if (!startPayload.appId || !startPayload.rtcToken) {
         throw new Error('Missing Agora RTC credentials for voice session');
       }
+
       const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
+      AgoraRTC.setParameter('ENABLE_AUDIO_PTS', true);
+      AgoraRTC.setParameter('ENABLE_AUDIO_PTS_METADATA', true);
+
       const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
       rtcClientRef.current = client;
 
       client.on('user-published', async (remoteUser, mediaType) => {
-        if (mediaType !== 'audio') return;
+        if (mediaType !== 'audio' || !activeRef.current) return;
+        if (
+          !isAgentRemoteUser(remoteUser.uid, agentUidRef.current, shopperRtcUidRef.current)
+        ) {
+          return;
+        }
         await client.subscribe(remoteUser, 'audio');
-        busyRef.current = true;
         setState('speaking');
-        remoteUser.audioTrack?.play();
+        await playRemoteAudioTrack(remoteUser.audioTrack, audioAnchorRef.current);
       });
 
-      client.on('user-unpublished', (_remoteUser, mediaType) => {
-        if (mediaType === 'audio' && activeRef.current) {
-          busyRef.current = false;
-          setState('listening');
+      client.on('user-unpublished', (remoteUser, mediaType) => {
+        if (mediaType !== 'audio' || !activeRef.current) return;
+        if (
+          !isAgentRemoteUser(remoteUser.uid, agentUidRef.current, shopperRtcUidRef.current)
+        ) {
+          return;
         }
+        setState('listening');
+      });
+
+      client.on('user-left', (remoteUser) => {
+        if (!activeRef.current) return;
+        if (
+          !isAgentRemoteUser(remoteUser.uid, agentUidRef.current, shopperRtcUidRef.current)
+        ) {
+          return;
+        }
+        handleSessionEnded(
+          'Voice assistant disconnected. Tap Try again to start a new session.',
+        ).catch(() => undefined);
       });
 
       await client.join(
         startPayload.appId,
         startPayload.channel,
         startPayload.rtcToken,
-        startPayload.shopperUserId,
+        startPayload.shopperRtcUid,
       );
 
       const micTrack = await AgoraRTC.createMicrophoneAudioTrack();
       micTrackRef.current = micTrack;
       await client.publish([micTrack]);
-      setState('listening');
+      // Mute uplink during greeting — publish requires an enabled track.
+      await micTrack.setMuted(true);
+
+      const rtmClient = await createVoiceRtmClient(
+        startPayload.appId,
+        startPayload.shopperRtcUid,
+        startPayload.rtmToken,
+        startPayload.channel,
+      );
+
+      voiceAiRuntimeRef.current = await initVoiceAiToolkit({
+        rtcClient: client,
+        rtmClient,
+        channel: startPayload.channel,
+        shopperRtcUid: startPayload.shopperRtcUid,
+        onTranscripts: (lines) => {
+          if (!activeRef.current || lines.length === 0) return;
+          setTranscripts((prev) => mergeTranscripts(prev, lines));
+        },
+        onSpeaking: (active) => {
+          if (!activeRef.current) return;
+          setState(active ? 'speaking' : 'listening');
+        },
+        onThinking: (active) => {
+          if (!activeRef.current) return;
+          setState(active ? 'thinking' : 'listening');
+        },
+      });
+
+      if (activeRef.current) setState('listening');
     },
-    [],
+    [handleSessionEnded],
   );
 
   const startAssistant = useCallback(
-    async (refreshCart: () => Promise<void>) => {
+    async (refreshCart: () => Promise<void>, applyCart?: (cart: Cart) => void) => {
+      if (activeRef.current || sessionIdRef.current || rtcClientRef.current) {
+        const previousSessionId = sessionIdRef.current;
+        const shopperUserId = shopperUserIdRef.current;
+        activeRef.current = false;
+        await cleanupVoiceStack();
+        if (previousSessionId) {
+          try {
+            await api.stopVoiceAiSession({ sessionId: previousSessionId, shopperUserId });
+          } catch {
+            // ignore stale stop errors
+          }
+        }
+        sessionIdRef.current = '';
+        setPollSessionId('');
+        await new Promise((resolve) => window.setTimeout(resolve, 450));
+      }
+
       setError('');
       setNotice('');
       setState('connecting');
       setOpen(true);
       activeRef.current = true;
-      busyRef.current = false;
       cartRefreshRef.current = refreshCart;
+      applyCartRef.current = applyCart ?? null;
+      agentUidRef.current = null;
 
       const context = deriveContext(pathname);
       const shopperUserId = shopperUserIdRef.current;
@@ -273,12 +337,13 @@ export function useVoiceAssistant() {
         const startPayload = await api.startVoiceAiSession({
           surface: context.surface,
           shopperUserId,
+          shopperRtcUid: shopperRtcUidRef.current,
           liveSessionId: context.liveSessionId,
           productId: context.productId,
         });
 
         sessionIdRef.current = startPayload.sessionId;
-        modeRef.current = startPayload.mode;
+        setPollSessionId(startPayload.sessionId);
 
         if (context.surface === 'live') {
           setLiveAudioDucked(true);
@@ -292,56 +357,81 @@ export function useVoiceAssistant() {
           },
         ]);
 
-        if (startPayload.mode === 'agora') {
-          await connectAgoraRtc(startPayload);
-          if (!startPayload.publicBaseConfigured) {
-            setNotice('Agora voice is active on a private RTC channel.');
-          }
-        } else {
-          setNotice(
-            'Local voice assist is active. Set AI_PUBLIC_BASE_URL on the API for full Agora Conversational AI cloud mode.',
-          );
-          speakLocal(startPayload.greeting, () => {
-            if (activeRef.current) startListeningRef.current();
-          });
+        await connectAgoraRtc(startPayload);
+
+        const activatePayload = await api.activateVoiceAiSession({
+          sessionId: startPayload.sessionId,
+          shopperUserId,
+        });
+        agentUidRef.current = activatePayload.agentUid ?? null;
+
+        const client = rtcClientRef.current;
+        if (client) {
+          await subscribeAgentAudio(client);
         }
+
+        unmuteTimerRef.current = window.setTimeout(() => {
+          unmuteTimerRef.current = null;
+          if (!activeRef.current) return;
+          micTrackRef.current?.setMuted(false).catch(() => undefined);
+        }, GREETING_MIC_MUTE_MS);
+
+        setNotice('Private Agora voice session active. Speak naturally to the assistant.');
+        if (activeRef.current) setState('listening');
       } catch (err) {
         activeRef.current = false;
-        busyRef.current = false;
-        await cleanupRtc();
+        await cleanupVoiceStack();
         setLiveAudioDucked(false);
         sessionIdRef.current = '';
+        setPollSessionId('');
         setState('error');
         setError(err instanceof Error ? err.message : 'Could not start Voice AI');
       }
     },
-    [cleanupRtc, connectAgoraRtc, pathname, speakLocal],
+    [cleanupVoiceStack, connectAgoraRtc, pathname, subscribeAgentAudio],
   );
 
   useEffect(() => {
-    if (!open || modeRef.current !== 'agora' || !sessionIdRef.current) return undefined;
+    if (!open || !pollSessionId) return undefined;
 
-    const poll = window.setInterval(() => {
-      const sessionId = sessionIdRef.current;
-      if (!sessionId || !activeRef.current) return;
+    const tick = () => {
+      if (!activeRef.current) return;
       api
-        .getVoiceAiSession(sessionId)
+        .getVoiceAiSession(pollSessionId)
         .then(async (session) => {
-          setTranscripts(session.transcripts);
+          if (session.state === 'ended') {
+            await handleSessionEnded(
+              'Voice assistant session ended. Tap Try again to start a new session.',
+            );
+            return;
+          }
+          if (session.cart) {
+            applyCartRef.current?.(session.cart);
+          }
           if (session.cartUpdated) {
             await cartRefreshRef.current?.();
           }
         })
-        .catch(() => undefined);
-    }, 2000);
+        .catch(async (err: unknown) => {
+          if (!activeRef.current) return;
+          const message = err instanceof Error ? err.message : '';
+          if (message.includes('404') || message.toLowerCase().includes('not found')) {
+            await handleSessionEnded(
+              'Voice assistant session expired. Tap Try again to start a new session.',
+            );
+          }
+        });
+    };
 
+    tick();
+    const poll = window.setInterval(tick, 1000);
     return () => window.clearInterval(poll);
-  }, [open, state]);
+  }, [handleSessionEnded, open, pollSessionId]);
 
   useEffect(() => {
     return () => {
+      if (!sessionIdRef.current) return;
       activeRef.current = false;
-      busyRef.current = false;
       stopAssistant().catch(() => undefined);
     };
   }, [stopAssistant]);
@@ -352,6 +442,7 @@ export function useVoiceAssistant() {
     error,
     notice,
     transcripts,
+    audioAnchorRef,
     startAssistant,
     stopAssistant,
     setOpen,

@@ -13,6 +13,7 @@
     "test:phase3": "bash ./scripts/test-phase3.sh",
     "test:phase4": "bash ./scripts/test-phase4.sh",
     "test:phase5": "bash ./scripts/test-phase5.sh",
-    "verify:phase5": "node ./scripts/verify-phase5-e2e.js"
+    "verify:phase5": "node ./scripts/verify-phase5-e2e.js",
+    "test:mcp": "node ./scripts/test-mcp-commerce.js"
   }
 }

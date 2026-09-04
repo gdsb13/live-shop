@@ -16,14 +16,12 @@ export type VoiceTranscriptLine = {
 
 export type VoiceSessionStart = {
   sessionId: string;
-  mode: 'agora' | 'local';
   channel: string;
   shopperUserId: string;
+  shopperRtcUid: number;
   surface: VoiceAssistantSurface;
   greeting: string;
-  publicBaseConfigured: boolean;
-  appId?: string;
-  agentUid?: string;
-  rtcToken?: string;
-  rtmToken?: string;
+  appId: string;
+  rtcToken: string;
+  rtmToken: string;
 };

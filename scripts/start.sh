@@ -58,7 +58,7 @@ if is_running "$RUN_DIR/api.pid" || is_running "$RUN_DIR/web.pid"; then
 fi
 
 export API_PORT API_HOST WEB_ORIGIN NEXT_PUBLIC_API_URL AGORA_APP_ID AGORA_APP_CERTIFICATE AGORA_SIGNALING_AREA
-export AI_PUBLIC_BASE_URL AI_CUSTOM_LLM_API_KEY AGORA_AI_AREA
+export AI_PUBLIC_BASE_URL MCP_ENDPOINT OPENAI_MODEL AGORA_AI_AREA
 export API_PROXY_TARGET="http://127.0.0.1:${API_PORT}"
 
 setsid nohup node "$ROOT/apps/api/src/server.js" >>"$LOG_DIR/api.log" 2>&1 </dev/null &

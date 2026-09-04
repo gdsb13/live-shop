@@ -5,6 +5,7 @@
     "category": "Electronics",
     "brand": "Samsung",
     "description": "Crystal Processor 4K upscales content with vivid colour and sharp detail. A premium television for streaming, sports and movies. Smart TV with popular streaming apps and voice assistant support.",
+    "keywords": ["tv", "television", "smart tv", "samsung tv", "4k tv", "led tv", "flat screen"],
     "basePrice": 42999,
     "images": ["https://images.unsplash.com/photo-1593359677873-a4bb92f829d1?w=800&q=80"],
     "variants": [
@@ -22,7 +23,8 @@
     "name": "Sony WH-1000XM5 Wireless Noise Cancelling Headphones",
     "category": "Electronics",
     "brand": "Sony",
-    "description": "Industry-leading noise cancellation with exceptional call quality and up to 30 hours battery life.",
+    "description": "Industry-leading noise cancellation with exceptional call quality and up to 30 hours battery life. Premium over-ear wireless headphones for travel, work, and music.",
+    "keywords": ["headphones", "earphones", "headset", "wireless headphones", "noise cancelling", "anc", "sony xm5", "over ear"],
     "basePrice": 26990,
     "images": ["https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=800&q=80"],
     "variants": [
@@ -39,7 +41,8 @@
     "name": "OnePlus Nord 4 5G",
     "category": "Electronics",
     "brand": "OnePlus",
-    "description": "Sleek metal unibody smartphone with flagship-grade performance, 80W SUPERVOOC charging and a bright AMOLED display.",
+    "description": "Sleek metal unibody smartphone with flagship-grade performance, 80W SUPERVOOC charging and a bright AMOLED display. A value 5G Android mobile for everyday use.",
+    "keywords": ["mobile", "smartphone", "phone", "cell phone", "android phone", "5g mobile", "oneplus phone", "nord"],
     "basePrice": 29999,
     "images": ["https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&q=80"],
     "variants": [
@@ -56,7 +59,8 @@
     "name": "Apple iPad Air M2",
     "category": "Electronics",
     "brand": "Apple",
-    "description": "Powerful M2 chip in a thin, light design. Ideal for creativity, streaming and everyday productivity.",
+    "description": "Powerful M2 chip in a thin, light design. Ideal for creativity, streaming and everyday productivity. Apple tablet for students and professionals.",
+    "keywords": ["tablet", "ipad", "apple tablet", "ipad air", "m2 tablet"],
     "basePrice": 59900,
     "images": ["https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=800&q=80"],
     "variants": [
@@ -73,7 +77,8 @@
     "name": "Allen Solly Slim Fit Formal Shirt",
     "category": "Apparel",
     "brand": "Allen Solly",
-    "description": "Premium cotton formal shirt with a modern slim fit, ideal for office and evening wear.",
+    "description": "Premium cotton formal shirt with a modern slim fit, ideal for office and evening wear. Business formal and smart casual.",
+    "keywords": ["shirt", "formal shirt", "dress shirt", "office shirt", "allen solly shirt", "men shirt"],
     "basePrice": 1899,
     "images": ["https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=800&q=80"],
     "variants": [
@@ -91,7 +96,8 @@
     "name": "Nike Revolution 7 Running Shoes",
     "category": "Apparel",
     "brand": "Nike",
-    "description": "Lightweight everyday running shoes with soft foam cushioning for comfortable miles.",
+    "description": "Lightweight everyday running shoes with soft foam cushioning for comfortable miles. Casual sneakers for gym and road running.",
+    "keywords": ["shoes", "running shoes", "sneakers", "trainers", "nike shoes", "sports shoes"],
     "basePrice": 3995,
     "images": ["https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=80"],
     "variants": [
@@ -109,7 +115,8 @@
     "name": "Levi's 501 Original Fit Jeans",
     "category": "Apparel",
     "brand": "Levi's",
-    "description": "The original button-fly jean. Straight leg, classic fit, and timeless style.",
+    "description": "The original button-fly jean. Straight leg, classic fit, and timeless style. Denim jeans for casual wear.",
+    "keywords": ["jeans", "denim", "pants", "levis 501", "blue jeans"],
     "basePrice": 3499,
     "images": ["https://images.unsplash.com/photo-1542272604-787c3835535d?w=800&q=80"],
     "variants": [
@@ -128,6 +135,7 @@
     "category": "Cosmetics",
     "brand": "Lakmé",
     "description": "Long-lasting matte lip colours with rich pigment and comfortable wear for all-day confidence.",
+    "keywords": ["lipstick", "lip color", "makeup", "lakme lipstick", "matte lipstick"],
     "basePrice": 1299,
     "images": ["https://images.unsplash.com/photo-1586495777744-4413f21062af?w=800&q=80"],
     "variants": [
@@ -145,6 +153,7 @@
     "category": "Cosmetics",
     "brand": "Mamaearth",
     "description": "Brightening serum with Vitamin C and turmeric to reduce dullness and improve skin radiance.",
+    "keywords": ["serum", "face serum", "skincare", "vitamin c", "mamaearth serum"],
     "basePrice": 599,
     "images": ["https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=800&q=80"],
     "variants": [
@@ -162,6 +171,7 @@
     "category": "Cosmetics",
     "brand": "Maybelline",
     "description": "Natural matte finish foundation that adapts to skin tone and texture for a poreless look.",
+    "keywords": ["foundation", "makeup", "face makeup", "maybelline foundation", "matte foundation"],
     "basePrice": 549,
     "images": ["https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=800&q=80"],
     "variants": [
@@ -179,6 +189,7 @@
     "category": "Home",
     "brand": "Prestige",
     "description": "Stainless steel electric kettle with auto shut-off, boil-dry protection and fast boiling.",
+    "keywords": ["kettle", "electric kettle", "water boiler", "tea kettle", "prestige kettle"],
     "basePrice": 1499,
     "images": ["https://images.unsplash.com/photo-1585771724684-38269b663e63?w=800&q=80"],
     "variants": [
@@ -195,6 +206,7 @@
     "category": "Home",
     "brand": "Milton",
     "description": "Vacuum insulated flask keeps beverages hot for 24 hours and cold for 24 hours.",
+    "keywords": ["flask", "thermos", "water bottle", "insulated bottle", "milton flask"],
     "basePrice": 899,
     "images": ["https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=800&q=80"],
     "variants": [
@@ -212,6 +224,7 @@
     "category": "Home",
     "brand": "Philips",
     "description": "Adjustable LED desk lamp with three brightness levels and eye-comfort light for reading and work.",
+    "keywords": ["lamp", "desk lamp", "study lamp", "table lamp", "led lamp", "reading light"],
     "basePrice": 2199,
     "images": ["https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=800&q=80"],
     "variants": [
@@ -228,6 +241,7 @@
     "category": "Lifestyle",
     "brand": "Mi",
     "description": "Fitness tracker with AMOLED display, 150+ sports modes, SpO2 monitoring and 16-day battery.",
+    "keywords": ["fitness band", "smart band", "activity tracker", "mi band", "wearable"],
     "basePrice": 2799,
     "images": ["https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=800&q=80"],
     "variants": [
@@ -245,6 +259,7 @@
     "category": "Lifestyle",
     "brand": "Wildcraft",
     "description": "Durable 35L backpack with padded laptop sleeve, hidden zippers and ergonomic shoulder straps.",
+    "keywords": ["backpack", "bag", "laptop bag", "travel bag", "wildcraft backpack"],
     "basePrice": 2499,
     "images": ["https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&q=80"],
     "variants": [
@@ -262,6 +277,7 @@
     "category": "Lifestyle",
     "brand": "boAt",
     "description": "True wireless earbuds with Insta Wake N Pair, 13mm drivers and up to 60 hours playback with case.",
+    "keywords": ["earbuds", "earphones", "tws", "wireless earbuds", "airdopes", "bluetooth earbuds"],
     "basePrice": 999,
     "images": ["https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=800&q=80"],
     "variants": [

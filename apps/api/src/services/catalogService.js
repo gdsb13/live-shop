@@ -26,6 +26,7 @@ function listProducts({ category, search } = {}) {
         p.description,
         p.category,
         p.id,
+        ...(p.keywords || []),
         ...(p.features || []),
         ...Object.values(p.specifications || {}),
       ]
@@ -50,6 +51,48 @@ function getVariant(product, variantId) {
   return product.variants.find((v) => v.id === variantId) || null;
 }
 
+function pickDefaultVariant(product) {
+  if (!product || !Array.isArray(product.variants) || product.variants.length === 0) {
+    return null;
+  }
+  return product.variants.find((variant) => variant.inStock) || product.variants[0];
+}
+
+// Match variant id, display name, sku, or partial name hints from voice/LLM input.
+function resolveVariant(product, variantHint) {
+  if (!product || !Array.isArray(product.variants) || product.variants.length === 0) {
+    return null;
+  }
+
+  const hint = String(variantHint || '').trim();
+  if (!hint) {
+    return pickDefaultVariant(product);
+  }
+
+  const exact = product.variants.find((variant) => variant.id === hint);
+  if (exact) return exact;
+
+  const lower = hint.toLowerCase();
+  const byId = product.variants.find((variant) => variant.id.toLowerCase() === lower);
+  if (byId) return byId;
+
+  const byName = product.variants.find((variant) => variant.name.toLowerCase() === lower);
+  if (byName) return byName;
+
+  const bySku = product.variants.find(
+    (variant) => String(variant.sku || '').toLowerCase() === lower,
+  );
+  if (bySku) return bySku;
+
+  const byPartialName = product.variants.find(
+    (variant) =>
+      variant.name.toLowerCase().includes(lower) || lower.includes(variant.name.toLowerCase()),
+  );
+  if (byPartialName) return byPartialName;
+
+  return null;
+}
+
 function summarizeProduct(product) {
   return {
     id: product.id,
@@ -57,6 +100,7 @@ function summarizeProduct(product) {
     category: product.category,
     brand: product.brand,
     description: product.description,
+    keywords: product.keywords || [],
     basePrice: product.basePrice,
     image: product.images[0],
     rating: product.rating,
@@ -89,6 +133,8 @@ module.exports = {
   listProducts,
   getProductById,
   getVariant,
+  pickDefaultVariant,
+  resolveVariant,
   summarizeProduct,
   getProductsForComparison,
 };

@@ -30,10 +30,21 @@ function deleteSession(sessionId) {
   sessions.delete(sessionId);
 }
 
+function listRunningSessions() {
+  const running = [];
+  for (const session of sessions.values()) {
+    if (session.state === 'running') {
+      running.push(session);
+    }
+  }
+  return running;
+}
+
 module.exports = {
   createSession,
   getSession,
   getSessionByChannel,
   updateSession,
   deleteSession,
+  listRunningSessions,
 };

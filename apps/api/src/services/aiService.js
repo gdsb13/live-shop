@@ -4,7 +4,9 @@ const { randomUUID } = require('crypto');
 const { RtcTokenBuilder, RtmTokenBuilder, RtcRole } = require('agora-token');
 const aiSessionStore = require('./aiSessionStore');
 const aiToolService = require('./aiToolService');
+const cartService = require('./cartService');
 const { ASSISTANT_GREETING, buildSystemPrompt } = require('./aiAssistantConfig');
+const { requireMcpEndpoint, buildMcpServers } = require('../mcp/mcpConfig');
 
 const TOKEN_TTL_SECONDS = 3600;
 
@@ -28,19 +30,25 @@ function publicApiBase() {
   return String(process.env.AI_PUBLIC_BASE_URL || '').replace(/\/$/, '');
 }
 
-function customLlmUrlForChannel(channel) {
-  const base = publicApiBase();
-  if (!base) return null;
-  // Full OpenAI-compatible URL Agora CustomLLM calls directly.
-  return `${base}/api/ai/llm/${encodeURIComponent(channel)}/chat/completions`;
+function parseRtcUid(value, fieldName) {
+  const uid = Number(value);
+  if (!Number.isInteger(uid) || uid <= 0 || uid > 4294967295) {
+    throw httpError(`${fieldName} must be a positive integer RTC UID`, 400);
+  }
+  return uid;
 }
 
-function buildRtcToken(appId, appCertificate, channelName, userId) {
-  return RtcTokenBuilder.buildTokenWithUserAccount(
+function generateAgentRtcUid() {
+  // Distinct numeric UID for the ConvoAI agent (not string account names).
+  return Math.floor(900000001 + Math.random() * 99999998);
+}
+
+function buildRtcToken(appId, appCertificate, channelName, uid) {
+  return RtcTokenBuilder.buildTokenWithUid(
     appId,
     appCertificate,
     channelName,
-    userId,
+    uid,
     RtcRole.PUBLISHER,
     TOKEN_TTL_SECONDS,
     TOKEN_TTL_SECONDS,
@@ -55,52 +63,82 @@ async function loadAgentKit() {
   return import('agora-agents');
 }
 
-function buildSessionContext({ surface, shopperUserId, liveSessionId, productId }) {
+function buildSessionContext({ surface, shopperUserId, shopperRtcUid, liveSessionId, productId }) {
   const liveContext = liveSessionId ? aiToolService.buildLiveContext(liveSessionId) : null;
   return {
     id: randomUUID(),
     surface: surface || 'storefront',
     shopperUserId,
+    shopperRtcUid,
     channel: `ai-${shopperUserId}`,
     liveSessionId: liveSessionId || null,
     productId: productId || null,
     liveContext,
     lastProductIds:
       liveContext && liveContext.featuredProductId ? [liveContext.featuredProductId] : [],
+    lastProductId: productId || (liveContext && liveContext.featuredProductId) || null,
     cartUpdated: false,
     transcripts: [],
-    awaitingSearchQuery: false,
-    lastSearchQuery: null,
     state: 'starting',
-    mode: publicApiBase() ? 'agora' : 'local',
+    lastActivityAt: new Date().toISOString(),
   };
 }
 
-// Start the private Agora Conversational AI session for one shopper.
-async function startAgoraVoiceSession(sessionContext) {
-  const llmUrl = customLlmUrlForChannel(sessionContext.channel);
-  if (!llmUrl) {
-    throw httpError(
-      'AI_PUBLIC_BASE_URL is not configured. Agora cloud must reach the commerce LLM endpoint over HTTPS (for example via ngrok).',
-      503,
-      'AI_PUBLIC_URL_REQUIRED',
-    );
-  }
+function watchAgentSession(sessionId, agentSession) {
+  if (!agentSession) return;
 
+  const markEnded = (reason) => {
+    const record = aiSessionStore.getSession(sessionId);
+    if (!record || record.state === 'ended') return;
+    console.log(`[VoiceAI] Agent ended session=${sessionId} reason=${reason}`);
+    aiSessionStore.updateSession(sessionId, {
+      ...record,
+      state: 'ended',
+      endReason: reason,
+      agentSession: null,
+    });
+  };
+
+  const events = ['stopped', 'stop', 'idle', 'error', 'ended'];
+  for (const eventName of events) {
+    if (typeof agentSession.on === 'function') {
+      try {
+        agentSession.on(eventName, () => markEnded(eventName));
+      } catch {
+        // Event may not exist on this SDK version.
+      }
+    }
+    if (typeof agentSession.addListener === 'function') {
+      try {
+        agentSession.addListener(eventName, () => markEnded(eventName));
+      } catch {
+        // Event may not exist on this SDK version.
+      }
+    }
+  }
+}
+
+// Start a private Agora managed Voice AI session for this shopper.
+async function startAgoraVoiceSession(sessionContext) {
+  const mcpEndpoint = requireMcpEndpoint();
   const { appId, appCertificate } = requireAgoraConfig();
   const {
     AgoraClient,
     Agent,
     Area,
     DeepgramSTT,
-    CustomLLM,
+    OpenAI,
     MiniMaxTTS,
     ExpiresIn,
   } = await loadAgentKit();
 
   const areaName = String(process.env.AGORA_AI_AREA || 'AP').toUpperCase();
   const area = Area[areaName] || Area.AP;
-  const customLlmKey = process.env.AI_CUSTOM_LLM_API_KEY || 'live-shop-ai-key';
+  const openAiModel = String(process.env.OPENAI_MODEL || 'gpt-4o-mini').trim();
+
+  console.log(
+    `[VoiceAI] Starting managed agent channel=${sessionContext.channel} mcp=${mcpEndpoint}`,
+  );
 
   const client = new AgoraClient({
     area,
@@ -108,7 +146,32 @@ async function startAgoraVoiceSession(sessionContext) {
     appCertificate,
   });
 
-  const agent = new Agent({ client })
+  const agent = new Agent({
+    client,
+    advancedFeatures: {
+      enable_rtm: true,
+      enable_tools: true,
+    },
+    turnDetection: {
+      config: {
+        speech_threshold: 0.6,
+        start_of_speech: {
+          mode: 'vad',
+          vad_config: {
+            // Real barge-in after ~0.5s of speech; ignores greeting echo / noise.
+            interrupt_duration_ms: 480,
+            prefix_padding_ms: 300,
+          },
+        },
+        end_of_speech: {
+          mode: 'vad',
+          vad_config: {
+            silence_duration_ms: 640,
+          },
+        },
+      },
+    },
+  })
     .withStt(
       new DeepgramSTT({
         model: 'nova-3',
@@ -116,35 +179,41 @@ async function startAgoraVoiceSession(sessionContext) {
       }),
     )
     .withLlm(
-      new CustomLLM({
-        apiKey: customLlmKey,
-        url: llmUrl,
-        model: 'live-shop-commerce',
+      new OpenAI({
+        model: openAiModel,
         systemMessages: [{ role: 'system', content: buildSystemPrompt(sessionContext) }],
+        greetingMessage: ASSISTANT_GREETING,
+        mcpServers: buildMcpServers(mcpEndpoint, sessionContext.channel),
       }),
     )
     .withTts(
       new MiniMaxTTS({
         model: 'speech_2_6_turbo',
+        voiceId: 'English_captivating_female1',
       }),
     )
     .withParameters({
+      audio_scenario: 'chorus',
       data_channel: 'rtm',
       enable_metrics: true,
+      enable_error_message: true,
     });
 
-  const agentUid = `ai-agent-${randomUUID().slice(0, 8)}`;
+  const agentUid = generateAgentRtcUid();
   const agentSession = agent.createSession({
     name: `voice-ai-${sessionContext.id}`,
     channel: sessionContext.channel,
-    agentUid,
-    remoteUids: [sessionContext.shopperUserId],
-    enableStringUid: true,
-    idleTimeout: 120,
+    agentUid: String(agentUid),
+    remoteUids: [String(sessionContext.shopperRtcUid)],
+    enableStringUid: false,
+    idleTimeout: 300,
     expiresIn: ExpiresIn.hours(1),
   });
 
   const agentId = await agentSession.start();
+  console.log(`[VoiceAI] Managed agent started channel=${sessionContext.channel} agentId=${agentId}`);
+
+  watchAgentSession(sessionContext.id, agentSession);
 
   return {
     ...sessionContext,
@@ -154,16 +223,6 @@ async function startAgoraVoiceSession(sessionContext) {
     agentSession,
     client,
     state: 'running',
-    mode: 'agora',
-    createdAt: new Date().toISOString(),
-  };
-}
-
-function startLocalVoiceSession(sessionContext) {
-  return {
-    ...sessionContext,
-    state: 'running',
-    mode: 'local',
     createdAt: new Date().toISOString(),
   };
 }
@@ -174,49 +233,73 @@ async function startVoiceSession(body) {
   if (!shopperUserId || typeof shopperUserId !== 'string') {
     throw httpError('shopperUserId is required', 400);
   }
+  const shopperRtcUid = parseRtcUid(body.shopperRtcUid, 'shopperRtcUid');
 
-  let sessionContext = buildSessionContext({
+  requireMcpEndpoint();
+
+  const sessionContext = buildSessionContext({
     surface,
     shopperUserId,
+    shopperRtcUid,
     liveSessionId: body.liveSessionId,
     productId: body.productId,
   });
-
-  if (sessionContext.mode === 'agora') {
-    sessionContext = await startAgoraVoiceSession(sessionContext);
-  } else {
-    sessionContext = startLocalVoiceSession(sessionContext);
-  }
-
+  sessionContext.state = 'pending';
+  sessionContext.transcripts = [
+    {
+      role: 'assistant',
+      text: ASSISTANT_GREETING,
+      ts: new Date().toISOString(),
+    },
+  ];
   aiSessionStore.createSession(sessionContext);
 
-  const response = {
+  const { appId, appCertificate } = requireAgoraConfig();
+
+  return {
     sessionId: sessionContext.id,
-    mode: sessionContext.mode,
     channel: sessionContext.channel,
     shopperUserId: sessionContext.shopperUserId,
     surface: sessionContext.surface,
     greeting: ASSISTANT_GREETING,
-    publicBaseConfigured: Boolean(publicApiBase()),
-  };
-
-  if (sessionContext.mode === 'agora') {
-    response.appId = sessionContext.appId;
-    response.agentUid = sessionContext.agentUid;
-    response.rtcToken = buildRtcToken(
-      sessionContext.appId,
-      requireAgoraConfig().appCertificate,
+    appId,
+    shopperRtcUid: sessionContext.shopperRtcUid,
+    rtcToken: buildRtcToken(
+      appId,
+      appCertificate,
       sessionContext.channel,
-      sessionContext.shopperUserId,
-    );
-    response.rtmToken = buildRtmToken(
-      sessionContext.appId,
-      requireAgoraConfig().appCertificate,
-      sessionContext.shopperUserId,
-    );
+      sessionContext.shopperRtcUid,
+    ),
+    rtmToken: buildRtmToken(
+      appId,
+      appCertificate,
+      String(sessionContext.shopperRtcUid),
+    ),
+  };
+}
+
+// Start the managed agent after the shopper has joined the private RTC channel.
+async function activateVoiceSession(sessionId, shopperUserId) {
+  const record = aiSessionStore.getSession(sessionId);
+  if (!record) throw httpError('Voice AI session not found', 404);
+  if (record.shopperUserId !== shopperUserId) {
+    throw httpError('Not authorized for this voice session', 403);
+  }
+  if (record.state === 'running') {
+    return { activated: true, agentId: record.agentId };
+  }
+  if (record.state !== 'pending') {
+    throw httpError('Voice AI session cannot be activated', 400);
   }
 
-  return response;
+  const sessionContext = await startAgoraVoiceSession({ ...record });
+  aiSessionStore.updateSession(sessionId, sessionContext);
+
+  return {
+    activated: true,
+    agentId: sessionContext.agentId,
+    agentUid: sessionContext.agentUid,
+  };
 }
 
 async function stopVoiceSession(sessionId, shopperUserId) {
@@ -226,14 +309,16 @@ async function stopVoiceSession(sessionId, shopperUserId) {
     throw httpError('Not authorized for this voice session', 403);
   }
 
-  if (record.mode === 'agora' && record.agentSession) {
+  if (record.agentSession) {
     try {
       await record.agentSession.stop();
+      console.log(`[VoiceAI] Managed agent stopped session=${sessionId}`);
     } catch {
       // Agent may already have stopped after idle timeout.
     }
   }
 
+  aiSessionStore.updateSession(sessionId, { ...record, state: 'ended', agentSession: null });
   aiSessionStore.deleteSession(sessionId);
   return { stopped: true };
 }
@@ -248,60 +333,19 @@ function getVoiceSession(sessionId) {
   }
   return {
     sessionId: record.id,
-    mode: record.mode,
     state: record.state,
     surface: record.surface,
     channel: record.channel,
     cartUpdated,
-    transcripts: record.transcripts.slice(-20),
+    cart: cartService.getCart(),
+    transcripts: Array.isArray(record.transcripts) ? record.transcripts.slice(-20) : [],
   };
-}
-
-function runLocalTurn(sessionId, text) {
-  const record = aiSessionStore.getSession(sessionId);
-  if (!record) throw httpError('Voice AI session not found', 404);
-
-  const { runMockAgentTurn } = require('./aiLlmProxy');
-  const messages = [{ role: 'user', content: text }];
-  const turn = runMockAgentTurn(messages, record);
-
-  record.transcripts.push({ role: 'user', text, ts: new Date().toISOString() });
-  record.transcripts.push({ role: 'assistant', text: turn.reply, ts: new Date().toISOString() });
-  record.lastProductIds = turn.lastProductIds;
-  record.cartUpdated = Boolean(turn.cartUpdated);
-  if (record.lastSearchQuery === undefined) {
-    record.lastSearchQuery = null;
-  }
-  aiSessionStore.updateSession(sessionId, record);
-
-  return {
-    reply: turn.reply,
-    cartUpdated: turn.cartUpdated,
-    endSession: Boolean(turn.endSession),
-    transcripts: record.transcripts.slice(-20),
-  };
-}
-
-function attachSessionContextByChannel(channel) {
-  const record = aiSessionStore.getSessionByChannel(channel);
-  if (!record) return null;
-  return record;
-}
-
-function updateSessionFromLlmTurn(channel, turnMeta) {
-  const record = aiSessionStore.getSessionByChannel(channel);
-  if (!record || !turnMeta) return;
-  record.lastProductIds = turnMeta.lastProductIds || record.lastProductIds;
-  record.cartUpdated = Boolean(turnMeta.cartUpdated);
-  aiSessionStore.updateSession(record.id, record);
 }
 
 module.exports = {
   startVoiceSession,
+  activateVoiceSession,
   stopVoiceSession,
   getVoiceSession,
-  runLocalTurn,
-  attachSessionContextByChannel,
-  updateSessionFromLlmTurn,
   publicApiBase,
 };

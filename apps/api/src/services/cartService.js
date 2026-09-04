@@ -38,7 +38,7 @@ function addItem({ productId, variantId, quantity = 1 }) {
     throw err;
   }
 
-  const variant = catalogService.getVariant(product, variantId);
+  const variant = catalogService.resolveVariant(product, variantId) || catalogService.pickDefaultVariant(product);
   if (!variant) {
     const err = new Error('Variant not found');
     err.status = 404;

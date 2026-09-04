@@ -36,14 +36,19 @@ function validateToolInput(toolName, args) {
       break;
     case 'getPaymentOptions':
       break;
+    case 'getCart':
+      break;
     case 'getCurrentPrice':
-      if (!input.productId || !input.variantId) {
-        throw httpError('getCurrentPrice requires productId and variantId', 400);
+      if (!input.productId || typeof input.productId !== 'string') {
+        throw httpError('getCurrentPrice requires productId', 400);
       }
       break;
     case 'addToCart':
-      if (!input.productId || !input.variantId) {
-        throw httpError('addToCart requires productId and variantId', 400);
+      if (!input.productId || typeof input.productId !== 'string') {
+        throw httpError(
+          'addToCart requires a productId — search or getProduct for the item first',
+          400,
+        );
       }
       if (input.quantity !== undefined) {
         const quantity = Number(input.quantity);
