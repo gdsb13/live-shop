@@ -18,6 +18,10 @@ SHOPPER_B_H=(-H "X-Shopper-Id: ${SHOPPER_B}")
 curl -sf "$API/health" >/dev/null || fail "API health"
 pass "API health"
 
+# Reset mutable POC state so Phase 6 can run after other acceptance scripts in the same API process.
+curl -sf -X POST "$API/api/live-sessions/_test/reset" >/dev/null || fail "reset fixture sessions (ALLOW_TEST_RESET=1 required)"
+pass "fixture sessions + carts reset to seed"
+
 # Phase 6 mutates session lifecycle; fixture sessions must match seed (SCHEDULED).
 for sid in live-tech-tuesday live-beauty-hour live-home-essentials; do
   detail="$(curl -sf "$API/api/live-sessions/$sid")"

@@ -194,6 +194,7 @@ export function useHostBroadcast(
 
       await client.publish([micTrack, camTrack]);
 
+      // Application LIVE follows successful Agora publish; API does not verify RTC presence.
       if (!sessionLiveRef.current) {
         await api.startLiveSession(sessionId);
         sessionLiveRef.current = true;

@@ -65,6 +65,7 @@ async function loadAgentKit() {
 
 function buildSessionContext({ surface, shopperUserId, shopperRtcUid, liveSessionId, productId }) {
   const liveContext = liveSessionId ? aiToolService.buildLiveContext(liveSessionId) : null;
+  // Private Voice AI channel — separate from public live broadcast channel live-{sessionId}.
   return {
     id: randomUUID(),
     surface: surface || 'storefront',
@@ -340,7 +341,7 @@ function getVoiceSession(sessionId) {
     surface: record.surface,
     channel: record.channel,
     cartUpdated,
-    cart: cartService.getCart(),
+    cart: cartService.getCart(record.shopperUserId),
     transcripts: Array.isArray(record.transcripts) ? record.transcripts.slice(-20) : [],
   };
 }
