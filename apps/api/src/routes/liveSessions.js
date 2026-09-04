@@ -2,9 +2,20 @@
 
 const express = require('express');
 const liveSessionService = require('../services/liveSessionService');
+const cartService = require('../services/cartService');
 const chatRelayService = require('../services/chatRelayService');
 
 const router = express.Router();
+
+router.post('/_test/reset', (_req, res) => {
+  if (process.env.ALLOW_TEST_RESET !== '1') {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  liveSessionService.resetSessionsToSeed();
+  cartService.resetAllCarts();
+  res.json({ ok: true });
+});
 
 router.get('/', (_req, res, next) => {
   try {

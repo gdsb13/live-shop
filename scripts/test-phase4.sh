@@ -13,6 +13,12 @@ WEB="${WEB:-http://localhost:3000}"
 curl -sf "$API/health" >/dev/null || fail "API health"
 pass "API health"
 
+# Make a session LIVE for Agora tests (simulates post-publish start)
+detail="$(curl -sf "$API/api/live-sessions/live-tech-tuesday")"
+if echo "$detail" | grep -q '"status":"SCHEDULED"'; then
+  curl -sf -X POST "$API/api/live-sessions/live-tech-tuesday/start" >/dev/null
+fi
+
 # Phase 3 regression
 curl -sf "$API/api/live-sessions" | grep -q '"status":"LIVE"' || fail "live sessions"
 pass "GET /api/live-sessions (regression)"
@@ -40,10 +46,18 @@ code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/agora/rtc-token
 [ "$code" = "403" ] || fail "reject host role for viewer id (got $code)"
 pass "reject unauthorized host role"
 
-# Reject RTC on SCHEDULED session
+# Reject RTC on SCHEDULED session (audience)
 code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/agora/rtc-token" -H 'Content-Type: application/json' -d '{"liveSessionId":"live-beauty-hour","userId":"viewer-test123","role":"audience"}')"
-[ "$code" = "400" ] || fail "reject rtc on scheduled session (got $code)"
-pass "reject rtc when not LIVE"
+[ "$code" = "400" ] || fail "reject audience rtc on scheduled session (got $code)"
+pass "reject audience rtc when not LIVE"
+
+# Host RTC token allowed on SCHEDULED session (before broadcast publish completes)
+host_scheduled="$(curl -sf -X POST "$API/api/agora/rtc-token" -H 'Content-Type: application/json' -d '{"liveSessionId":"live-beauty-hour","userId":"host-live-beauty-hour-tab1","role":"host"}')"
+echo "$host_scheduled" | grep -q '"role":"host"' || fail "host rtc on scheduled session"
+curl -sf -X POST "$API/api/agora/host-release" -H 'Content-Type: application/json' \
+  -d '{"liveSessionId":"live-beauty-hour","userId":"host-live-beauty-hour-tab1"}' >/dev/null \
+  || fail "host release scheduled claim"
+pass "host rtc-token allowed on SCHEDULED session"
 
 # RTM token on LIVE session
 rtm="$(curl -sf -X POST "$API/api/agora/rtm-token" -H 'Content-Type: application/json' -d '{"liveSessionId":"live-tech-tuesday","userId":"viewer-test123"}')"

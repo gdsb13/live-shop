@@ -104,45 +104,16 @@ export default function HostPage() {
               </Link>
             </div>
 
-            <div className="host-actions">
-              {session.status === 'SCHEDULED' && (
-                <button
-                  className="button"
-                  type="button"
-                  disabled={busyId === session.id}
-                  onClick={() =>
-                    runAction(
-                      session.id,
-                      () => api.startLiveSession(session.id),
-                      `Started "${session.title}" — now click Go live with camera + mic`,
-                    )
-                  }
-                >
-                  Start session
-                </button>
-              )}
-              {session.status === 'LIVE' && (
-                <button
-                  className="button"
-                  type="button"
-                  disabled={busyId === session.id}
-                  onClick={() =>
-                    runAction(
-                      session.id,
-                      () => api.endLiveSession(session.id),
-                      `Ended "${session.title}"`,
-                    )
-                  }
-                >
-                  End session
-                </button>
-              )}
-            </div>
-
-            {session.status === 'LIVE' && (
+            {(session.status === 'SCHEDULED' || session.status === 'LIVE') && (
               <>
-                <HostBroadcastPanel sessionId={session.id} sessionStatus={session.status} />
-                <LiveChatPanel sessionId={session.id} sessionStatus={session.status} isHost />
+                <HostBroadcastPanel
+                  sessionId={session.id}
+                  sessionStatus={session.status}
+                  onSessionChange={loadSessions}
+                />
+                {session.status === 'LIVE' && (
+                  <LiveChatPanel sessionId={session.id} sessionStatus={session.status} isHost />
+                )}
               </>
             )}
 

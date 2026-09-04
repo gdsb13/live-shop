@@ -1,14 +1,17 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useCart } from '@/components/CartProvider';
 import { api } from '@/lib/api';
 
 export function Header() {
+  const pathname = usePathname();
   const { cart } = useCart();
   const count = cart?.itemCount ?? 0;
   const [liveCount, setLiveCount] = useState(0);
+  const isHostConsole = pathname === '/host' || pathname.startsWith('/host/');
 
   useEffect(() => {
     api
@@ -38,10 +41,12 @@ export function Header() {
               </span>
             )}
           </Link>
-          <Link href="/cart" className="cart-link">
-            Cart
-            {count > 0 && <span className="cart-badge">{count}</span>}
-          </Link>
+          {!isHostConsole && (
+            <Link href="/cart" className="cart-link">
+              Cart
+              {count > 0 && <span className="cart-badge">{count}</span>}
+            </Link>
+          )}
         </nav>
       </div>
     </header>

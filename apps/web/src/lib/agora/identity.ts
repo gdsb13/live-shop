@@ -41,6 +41,11 @@ export function setSessionChatName(sessionId: string, name: string, isHost = fal
   window.sessionStorage.setItem(chatNameKey(sessionId, isHost), name.trim());
 }
 
+/** Stable shopper/cart identity for this browser tab (shared with Voice AI). */
+export function getShopperId() {
+  return voiceShopperUserId();
+}
+
 /** Stable private Voice AI shopper id for this browser tab. */
 export function voiceShopperUserId() {
   return `shopper-ai-${getPageClientId()}`;

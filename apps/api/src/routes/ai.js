@@ -65,7 +65,16 @@ router.get('/session/:sessionId', (req, res, next) => {
 router.post('/tools/:toolName', (req, res, next) => {
   try {
     const toolName = req.params.toolName;
-    const result = executeTool(toolName, req.body || {}, (req.body && req.body.context) || {});
+    const bodyContext = (req.body && req.body.context) || {};
+    const sessionContext = {
+      ...bodyContext,
+      shopperUserId:
+        req.headers['x-shopper-id'] ||
+        req.headers['X-Shopper-Id'] ||
+        bodyContext.shopperUserId ||
+        null,
+    };
+    const result = executeTool(toolName, req.body || {}, sessionContext);
     res.json(result);
   } catch (err) {
     next(err);

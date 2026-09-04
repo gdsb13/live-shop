@@ -1,9 +1,12 @@
+import { getShopperId } from './agora/identity';
+
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ??
   (typeof window === 'undefined' ? 'http://127.0.0.1:3001' : '');
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
+    ...(typeof window !== 'undefined' ? { 'X-Shopper-Id': getShopperId() } : {}),
     ...(init?.headers as Record<string, string> | undefined),
   };
 
@@ -38,12 +41,34 @@ export const api = {
     }>(`/api/products${qs ? `?${qs}` : ''}`);
   },
 
-  getProduct: (id: string) =>
-    request<import('./types').Product>(`/api/products/${id}`),
+  getProduct: (id: string, params?: { variantId?: string; originatingLiveSessionId?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.variantId) query.set('variantId', params.variantId);
+    if (params?.originatingLiveSessionId) {
+      query.set('originatingLiveSessionId', params.originatingLiveSessionId);
+    }
+    const qs = query.toString();
+    return request<import('./types').Product & {
+      livePricing?: {
+        variantId: string;
+        listPrice: number;
+        discountEligible: boolean;
+        discountPercent: number;
+        discountAmount: number;
+        effectiveUnitPrice: number;
+        effectivePrice: number;
+      };
+    }>(`/api/products/${id}${qs ? `?${qs}` : ''}`);
+  },
 
   getCart: () => request<import('./types').Cart>('/api/cart'),
 
-  addToCart: (body: { productId: string; variantId: string; quantity: number }) =>
+  addToCart: (body: {
+    productId: string;
+    variantId: string;
+    quantity: number;
+    originatingLiveSessionId?: string | null;
+  }) =>
     request<import('./types').Cart>('/api/cart/items', {
       method: 'POST',
       body: JSON.stringify(body),

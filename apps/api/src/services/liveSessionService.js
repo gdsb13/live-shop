@@ -7,7 +7,10 @@ const catalogService = require('./catalogService');
 const seedPath = path.join(__dirname, '../data/liveSessions.json');
 
 // Mutable in-memory sessions. API restart resets to seed.
-// Production would persist session lifecycle in customer infrastructure.
+// Authoritative status (SCHEDULED | LIVE | ENDED) is host-driven only.
+// SCHEDULED: host has not gone live. LIVE: set via startSession after successful
+// host broadcast publish (client calls POST /start). ENDED: host ended broadcast.
+// scheduledAt is display-only — never used to infer status or discounts.
 let sessions = JSON.parse(fs.readFileSync(seedPath, 'utf8')).map((session) => ({
   ...session,
 }));
@@ -22,11 +25,40 @@ function clone(session) {
   return { ...session };
 }
 
+function withLivePricing(summary, session) {
+  if (!summary || session.status !== 'LIVE') {
+    return summary;
+  }
+
+  const discountService = require('./discountService');
+  const product = catalogService.getProductById(summary.id);
+  const variant = catalogService.pickDefaultVariant(product);
+  if (!variant) {
+    return summary;
+  }
+
+  const priced = discountService.evaluateLineItem({
+    unitPrice: variant.price,
+    quantity: 1,
+    productId: summary.id,
+    originatingLiveSessionId: session.id,
+  });
+
+  return {
+    ...summary,
+    listPrice: priced.listPrice,
+    discountEligible: priced.discountEligible,
+    discountPercent: priced.discountPercent,
+    discountAmount: priced.discountAmount,
+    effectivePrice: priced.effectiveUnitPrice,
+  };
+}
+
 function enrichSession(session) {
   const products = session.productIds
     .map((id) => catalogService.getProductById(id))
     .filter(Boolean)
-    .map((product) => catalogService.summarizeProduct(product));
+    .map((product) => withLivePricing(catalogService.summarizeProduct(product), session));
 
   const featuredProduct = session.featuredProductId
     ? products.find((p) => p.id === session.featuredProductId) || null
@@ -47,6 +79,12 @@ function getSessionById(id) {
   const session = sessions.find((s) => s.id === id);
   if (!session) return null;
   return enrichSession(session);
+}
+
+function getRawSessionById(id) {
+  const session = sessions.find((s) => s.id === id);
+  if (!session) return null;
+  return clone(session);
 }
 
 function startSession(id) {
@@ -99,10 +137,23 @@ function setFeaturedProduct(id, productId) {
   return enrichSession(session);
 }
 
+function resetSessionsToSeed() {
+  sessions = JSON.parse(fs.readFileSync(seedPath, 'utf8')).map((session) => ({
+    ...session,
+  }));
+  const hostClaimService = require('./hostClaimService');
+  for (const session of sessions) {
+    hostClaimService.clearSession(session.id);
+  }
+  return sessions.map(clone);
+}
+
 module.exports = {
   listSessions,
   getSessionById,
+  getRawSessionById,
   startSession,
   endSession,
   setFeaturedProduct,
+  resetSessionsToSeed,
 };

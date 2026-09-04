@@ -25,6 +25,13 @@ export default function LiveSessionPage() {
   const { refreshCart } = useCart();
   const [session, setSession] = useState<LiveSession | null>(null);
   const [featuredProductDetail, setFeaturedProductDetail] = useState<Product | null>(null);
+  const [featuredLivePricing, setFeaturedLivePricing] = useState<{
+    listPrice: number;
+    discountEligible: boolean;
+    discountPercent: number;
+    discountAmount: number;
+    effectivePrice: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -32,14 +39,31 @@ export default function LiveSessionPage() {
 
   const loadSession = useCallback(async () => {
     const data = await api.getLiveSession(params.sessionId);
-    setSession(data);
+    setSession((prev) => {
+      if (prev?.status === 'LIVE' && data.status !== 'LIVE') {
+        refreshCart().catch(() => undefined);
+      }
+      return data;
+    });
     if (data.featuredProduct) {
-      const product = await api.getProduct(data.featuredProduct.id);
+      const first = data.featuredProduct;
+      const product = await api.getProduct(first.id);
       setFeaturedProductDetail(product);
+      const firstVariant = product.variants.find((v) => v.inStock) || product.variants[0];
+      if (data.status === 'LIVE' && firstVariant) {
+        const priced = await api.getProduct(first.id, {
+          variantId: firstVariant.id,
+          originatingLiveSessionId: data.id,
+        });
+        setFeaturedLivePricing(priced.livePricing || null);
+      } else {
+        setFeaturedLivePricing(null);
+      }
     } else {
       setFeaturedProductDetail(null);
+      setFeaturedLivePricing(null);
     }
-  }, [params.sessionId]);
+  }, [params.sessionId, refreshCart]);
 
   useEffect(() => {
     let active = true;
@@ -85,6 +109,7 @@ export default function LiveSessionPage() {
         productId: session.featuredProduct.id,
         variantId: defaultVariantId,
         quantity: 1,
+        originatingLiveSessionId: session.status === 'LIVE' ? session.id : undefined,
       });
       await refreshCart();
       setMessage('Added featured product to cart.');
@@ -148,12 +173,33 @@ export default function LiveSessionPage() {
                   <div>
                     <h2>{session.featuredProduct.name}</h2>
                     <p className="brand">{session.featuredProduct.brand}</p>
-                    <p className="featured-price">
-                      {formatInr(session.featuredProduct.priceFrom)}
-                    </p>
+                    {featuredLivePricing?.discountEligible ? (
+                      <div className="live-price-breakdown">
+                        <p className="live-price-line muted">
+                          Original price: <span className="price-struck">{formatInr(featuredLivePricing.listPrice)}</span>
+                        </p>
+                        <p className="live-price-line live-discount-label">
+                          LIVE {featuredLivePricing.discountPercent}%: -{formatInr(featuredLivePricing.discountAmount)}
+                        </p>
+                        <p className="featured-price">
+                          Final: {formatInr(featuredLivePricing.effectivePrice)}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="featured-price">
+                        {formatInr(session.featuredProduct.priceFrom)}
+                      </p>
+                    )}
+                    {session.status === 'LIVE' && (
+                      <p className="live-benefit-note">20% LIVE session discount applies at checkout for session products.</p>
+                    )}
                     <div className="row" style={{ marginTop: 16 }}>
                       <Link
-                        href={`/products/${session.featuredProduct.id}`}
+                        href={
+                          session.status === 'LIVE'
+                            ? `/products/${session.featuredProduct.id}?liveSession=${encodeURIComponent(session.id)}`
+                            : `/products/${session.featuredProduct.id}`
+                        }
                         className="button-secondary"
                       >
                         View product
@@ -179,7 +225,11 @@ export default function LiveSessionPage() {
                 <h2>More in this session</h2>
                 <div className="product-grid">
                   {otherProducts.map((product) => (
-                    <ProductCard key={product.id} product={product} />
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      liveSessionId={session.status === 'LIVE' ? session.id : undefined}
+                    />
                   ))}
                 </div>
               </div>

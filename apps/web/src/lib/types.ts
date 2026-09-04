@@ -10,6 +10,11 @@ export type ProductSummary = {
   inStock: boolean;
   variantCount: number;
   priceFrom: number;
+  listPrice?: number;
+  discountEligible?: boolean;
+  discountPercent?: number;
+  discountAmount?: number;
+  effectivePrice?: number;
 };
 
 export type ProductVariant = {
@@ -44,7 +49,14 @@ export type CartItem = {
   variantName: string;
   brand: string;
   image: string;
+  listPrice?: number;
   unitPrice: number;
+  discountEligible?: boolean;
+  discountPercent?: number;
+  discountAmount?: number;
+  effectiveUnitPrice?: number;
+  effectivePrice?: number;
+  originatingLiveSessionId?: string | null;
   quantity: number;
   lineTotal: number;
 };
@@ -53,6 +65,7 @@ export type Cart = {
   id: string;
   items: CartItem[];
   subtotal: number;
+  discountTotal?: number;
   itemCount: number;
   currency: string;
 };

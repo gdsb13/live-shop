@@ -23,10 +23,15 @@ export default function CheckoutPage() {
     });
   }, []);
 
+  useEffect(() => {
+    refreshCart();
+  }, [refreshCart]);
+
   async function handleCheckout() {
     setError('');
     setSubmitting(true);
     try {
+      await refreshCart();
       const result = await api.checkout({ paymentMethod, deliveryPin });
       setOrder(result);
       await refreshCart();

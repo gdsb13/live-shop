@@ -46,7 +46,7 @@ Each Agora agent is started with `mcp_servers.headers['X-Voice-Channel'] = ai-{s
 The MCP adapter resolves the active voice session from that header so `cartUpdated` and live
 context stay tied to the correct shopper session.
 
-Prototype cart state is still process-global (`cartService`); production would use per-shopper carts.
+Prototype carts are keyed in-memory by `X-Shopper-Id` / Voice AI `shopperUserId`; production would persist per shopper.
 
 ## Required configuration
 

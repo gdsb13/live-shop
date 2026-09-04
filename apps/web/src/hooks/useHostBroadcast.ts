@@ -9,9 +9,13 @@ import { joinRtcChannel, releaseRtcChannel } from '@/lib/agora/rtcSession';
 type ConnectionState = 'idle' | 'connecting' | 'live' | 'ended' | 'error' | 'blocked';
 
 const HOST_BLOCKED_MSG =
-  'Host already broadcasting from another tab. You can still end the session below.';
+  'Host already broadcasting from another tab. End the other broadcast first.';
 
-export function useHostBroadcast(sessionId: string, sessionStatus: string) {
+export function useHostBroadcast(
+  sessionId: string,
+  sessionStatus: string,
+  onSessionChange?: () => void | Promise<void>,
+) {
   const videoRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<import('agora-rtc-sdk-ng').IAgoraRTCClient | null>(null);
   const micRef = useRef<import('agora-rtc-sdk-ng').ILocalAudioTrack | null>(null);
@@ -20,12 +24,19 @@ export function useHostBroadcast(sessionId: string, sessionStatus: string) {
   const userIdRef = useRef('');
   const localHostUserIdRef = useRef(hostUserId(sessionId));
   const hasClaimRef = useRef(false);
+  const sessionLiveRef = useRef(sessionStatus === 'LIVE');
   const [state, setState] = useState<ConnectionState>('idle');
-  const [statusText, setStatusText] = useState('Start the session, then go live with camera and mic.');
+  const [statusText, setStatusText] = useState(
+    'Click Go live with camera + mic to start broadcasting.',
+  );
   const [cameraOn, setCameraOn] = useState(false);
   const [micOn, setMicOn] = useState(false);
   const [viewerCount, setViewerCount] = useState(0);
   const viewerUidsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    sessionLiveRef.current = sessionStatus === 'LIVE';
+  }, [sessionStatus]);
 
   const releaseClaim = useCallback(async () => {
     if (!hasClaimRef.current) return;
@@ -75,36 +86,48 @@ export function useHostBroadcast(sessionId: string, sessionStatus: string) {
   }, [releaseClaim, sessionId]);
 
   const refreshHostStatus = useCallback(async () => {
-    if (sessionStatus !== 'LIVE') return;
+    if (sessionStatus !== 'SCHEDULED' && sessionStatus !== 'LIVE') return;
     try {
       const status = await api.getHostBroadcastStatus(sessionId);
       const mine = localHostUserIdRef.current;
-      if (status.broadcasting && status.hostUserId !== mine) {
-        setState((current) => (current === 'live' ? current : 'blocked'));
+      if (status.broadcasting && status.hostUserId !== mine && state !== 'live') {
+        setState('blocked');
         setStatusText(HOST_BLOCKED_MSG);
         return;
       }
       setState((current) => (current === 'blocked' ? 'idle' : current));
       setStatusText((prev) =>
         prev === HOST_BLOCKED_MSG
-          ? 'Start the session, then go live with camera and mic.'
+          ? 'Click Go live with camera + mic to start broadcasting.'
           : prev,
       );
     } catch {
       // ignore polling errors
     }
-  }, [sessionId, sessionStatus]);
+  }, [sessionId, sessionStatus, state]);
 
-  const stopBroadcast = useCallback(async () => {
+  const endBroadcast = useCallback(async () => {
     await cleanup();
-    setState((current) => (current === 'ended' ? current : 'idle'));
-    setStatusText('Broadcast stopped. Click Go live to publish again.');
-  }, [cleanup]);
+    try {
+      if (sessionLiveRef.current) {
+        await api.endLiveSession(sessionId);
+        sessionLiveRef.current = false;
+        await onSessionChange?.();
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not end session';
+      setStatusText(message);
+      setState('error');
+      return;
+    }
+    setState('ended');
+    setStatusText('Broadcast ended.');
+  }, [cleanup, onSessionChange, sessionId]);
 
   const goLive = useCallback(async () => {
-    if (sessionStatus !== 'LIVE') {
-      setState('idle');
-      setStatusText('Session must be LIVE before broadcasting.');
+    if (sessionStatus === 'ENDED') {
+      setState('ended');
+      setStatusText('This session has ended.');
       return;
     }
 
@@ -170,6 +193,13 @@ export function useHostBroadcast(sessionId: string, sessionStatus: string) {
       }
 
       await client.publish([micTrack, camTrack]);
+
+      if (!sessionLiveRef.current) {
+        await api.startLiveSession(sessionId);
+        sessionLiveRef.current = true;
+        await onSessionChange?.();
+      }
+
       setState('live');
       setStatusText('You are live. Viewers can watch on the session page.');
     } catch (err) {
@@ -186,7 +216,7 @@ export function useHostBroadcast(sessionId: string, sessionStatus: string) {
       ) {
         setState('blocked');
         setStatusText(
-          'Camera or microphone is in use by another tab. Close the other host tab or use End session there.',
+          'Camera or microphone is in use by another tab. Close the other host tab or end that broadcast.',
         );
         return;
       }
@@ -197,10 +227,12 @@ export function useHostBroadcast(sessionId: string, sessionStatus: string) {
       }
       setState('error');
     }
-  }, [cleanup, releaseClaim, sessionId, sessionStatus]);
+  }, [cleanup, onSessionChange, sessionId, sessionStatus]);
 
   useEffect(() => {
-    if (sessionStatus !== 'LIVE' || state === 'live') return undefined;
+    if ((sessionStatus !== 'SCHEDULED' && sessionStatus !== 'LIVE') || state === 'live') {
+      return undefined;
+    }
 
     refreshHostStatus().catch(() => undefined);
     const interval = setInterval(() => {
@@ -261,6 +293,6 @@ export function useHostBroadcast(sessionId: string, sessionStatus: string) {
     goLive,
     toggleCamera,
     toggleMic,
-    stopBroadcast,
+    endBroadcast,
   };
 }

@@ -5,6 +5,8 @@ const cartService = require('./cartService');
 const serviceabilityService = require('./serviceabilityService');
 const paymentOptionsService = require('./paymentOptionsService');
 const liveSessionService = require('./liveSessionService');
+const discountService = require('./discountService');
+const shopperContext = require('./shopperContext');
 const { ALLOWED_TOOL_NAMES } = require('./aiToolDefinitions');
 const { validateToolInput } = require('./aiToolValidation');
 
@@ -80,68 +82,119 @@ function getPaymentOptions() {
   return paymentOptionsService.listPaymentOptions();
 }
 
-function getCart() {
-  const cart = cartService.getCart();
+function mapCartItem(item) {
   return {
-    itemCount: cart.itemCount,
-    subtotal: cart.subtotal,
-    currency: cart.currency,
-    items: cart.items.map((item) => ({
-      productId: item.productId,
-      productName: item.productName,
-      variantId: item.variantId,
-      variantName: item.variantName,
-      quantity: item.quantity,
-      lineTotal: item.lineTotal,
-    })),
+    id: item.id,
+    productId: item.productId,
+    productName: item.productName,
+    variantId: item.variantId,
+    variantName: item.variantName,
+    quantity: item.quantity,
+    listPrice: item.listPrice ?? item.unitPrice,
+    unitPrice: item.unitPrice,
+    discountEligible: Boolean(item.discountEligible),
+    discountPercent: item.discountPercent || 0,
+    discountAmount: item.discountAmount || 0,
+    effectiveUnitPrice: item.effectiveUnitPrice ?? item.unitPrice,
+    effectivePrice: item.effectiveUnitPrice ?? item.unitPrice,
+    lineTotal: item.lineTotal,
+    originatingLiveSessionId: item.originatingLiveSessionId || null,
   };
 }
 
-function getCurrentPrice({ productId, variantId }) {
+function mapCartSummary(cart) {
+  return {
+    itemCount: cart.itemCount,
+    subtotal: cart.subtotal,
+    discountTotal: cart.discountTotal || 0,
+    currency: cart.currency,
+    items: cart.items.map(mapCartItem),
+  };
+}
+
+function cartShopperId(sessionContext = {}) {
+  return shopperContext.fromSessionContext(sessionContext);
+}
+
+function getCart(sessionContext = {}) {
+  const shopperId = cartShopperId(sessionContext);
+  const cart = cartService.getCart(shopperId);
+  return mapCartSummary(cart);
+}
+
+function getCurrentPrice({ productId, variantId }, sessionContext = {}) {
   const product = catalogService.getProductById(productId);
   if (!product) throw httpError('Product not found', 404);
   const variant = resolveProductVariant(product, variantId);
   if (!variant) throw httpError('Variant not found', 404);
+
+  const originatingLiveSessionId = discountService.trustedLiveSessionId(sessionContext);
+  const priced = discountService.evaluateLineItem({
+    unitPrice: variant.price,
+    quantity: 1,
+    productId: product.id,
+    originatingLiveSessionId,
+  });
+
   return {
     productId: product.id,
     productName: product.name,
     variantId: variant.id,
     variantName: variant.name,
     currency: 'INR',
-    price: variant.price,
+    price: priced.listPrice,
+    listPrice: priced.listPrice,
+    discountEligible: priced.discountEligible,
+    discountPercent: priced.discountPercent,
+    discountAmount: priced.discountAmount,
+    effectivePrice: priced.effectiveUnitPrice,
     inStock: variant.inStock,
+    originatingLiveSessionId: priced.originatingLiveSessionId,
     resolvedFromHint: variantId && variant.id !== variantId ? variant.id : undefined,
   };
 }
 
-function addToCart({ productId, variantId, quantity = 1 }) {
+function addToCart({ productId, variantId, quantity = 1 }, sessionContext = {}) {
   const product = catalogService.getProductById(productId);
   if (!product) throw httpError('Product not found', 404);
   const variant = resolveProductVariant(product, variantId);
   if (!variant) throw httpError('Variant not found', 404);
-  const cart = cartService.addItem({
+
+  const originatingLiveSessionId = discountService.trustedLiveSessionId(sessionContext);
+  const shopperId = cartShopperId(sessionContext);
+  const cart = cartService.addItem(shopperId, {
     productId,
     variantId: variant.id,
     quantity,
+    originatingLiveSessionId,
   });
+  const sessionKey = originatingLiveSessionId || null;
+  const addedItem = cart.items.find(
+    (item) =>
+      item.productId === productId &&
+      item.variantId === variant.id &&
+      (item.originatingLiveSessionId || null) === sessionKey,
+  );
+
   return {
     success: true,
     message: `Added ${product.name} (${variant.name}) to your cart`,
     variantId: variant.id,
     resolvedFromHint: variantId && variant.id !== variantId ? variant.id : undefined,
-    cart: {
-      itemCount: cart.itemCount,
-      subtotal: cart.subtotal,
-      currency: cart.currency,
-      items: cart.items,
-    },
+    originatingLiveSessionId: originatingLiveSessionId || null,
+    discountEligible: addedItem ? Boolean(addedItem.discountEligible) : false,
+    discountPercent: addedItem ? addedItem.discountPercent || 0 : 0,
+    discountAmount: addedItem ? addedItem.discountAmount || 0 : 0,
+    effectivePrice: addedItem ? addedItem.effectiveUnitPrice : variant.price,
+    cart: mapCartSummary(cart),
   };
 }
 
-function removeFromCart({ productId } = {}) {
-  const cart = cartService.getCart();
+function removeFromCart({ productId } = {}, sessionContext = {}) {
+  const shopperId = cartShopperId(sessionContext);
+  const cart = cartService.getCart(shopperId);
   if (cart.items.length === 0) {
-    return { success: false, message: 'Your cart is already empty.', cart };
+    return { success: false, message: 'Your cart is already empty.', cart: mapCartSummary(cart) };
   }
 
   let target = null;
@@ -157,17 +210,12 @@ function removeFromCart({ productId } = {}) {
     throw err;
   }
 
-  const updated = cartService.removeItem(target.id);
+  const updated = cartService.removeItem(shopperId, target.id);
   return {
     success: true,
     message: `Removed ${target.productName} from your cart`,
     removedProductId: target.productId,
-    cart: {
-      itemCount: updated.itemCount,
-      subtotal: updated.subtotal,
-      currency: updated.currency,
-      items: updated.items,
-    },
+    cart: mapCartSummary(updated),
   };
 }
 
@@ -205,13 +253,13 @@ function executeTool(toolName, args, sessionContext = {}) {
     case 'getPaymentOptions':
       return getPaymentOptions();
     case 'getCart':
-      return getCart();
+      return getCart(sessionContext);
     case 'getCurrentPrice':
-      return getCurrentPrice(input);
+      return getCurrentPrice(input, sessionContext);
     case 'addToCart':
-      return addToCart(input);
+      return addToCart(input, sessionContext);
     case 'removeFromCart':
-      return removeFromCart(input);
+      return removeFromCart(input, sessionContext);
     default:
       throw httpError(`Unsupported tool "${toolName}"`, 400);
   }

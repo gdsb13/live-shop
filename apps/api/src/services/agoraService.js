@@ -98,12 +98,31 @@ function assertUserId(userId) {
   return userId;
 }
 
-function assertLiveSession(sessionId) {
+function assertBroadcastableSession(sessionId) {
   if (!sessionId) throw httpError('liveSessionId is required', 400);
-  const session = liveSessionService.getSessionById(sessionId);
+  const session = liveSessionService.getRawSessionById(sessionId);
   if (!session) throw httpError('Live session not found', 404);
+  if (session.status === 'ENDED') {
+    throw httpError('Session has ended', 400);
+  }
+  return session;
+}
+
+function assertLiveSession(sessionId) {
+  const session = assertBroadcastableSession(sessionId);
   if (session.status !== 'LIVE') {
     throw httpError('Agora is only available while session is LIVE', 400);
+  }
+  return session;
+}
+
+function assertSessionForRtc(sessionId, role) {
+  const session = assertBroadcastableSession(sessionId);
+  if (role === 'audience' && session.status !== 'LIVE') {
+    throw httpError('Viewers can only join while session is LIVE', 400);
+  }
+  if (role === 'host' && session.status !== 'SCHEDULED' && session.status !== 'LIVE') {
+    throw httpError('Host cannot broadcast for this session', 400);
   }
   return session;
 }
@@ -111,7 +130,7 @@ function assertLiveSession(sessionId) {
 function issueRtcToken({ liveSessionId, userId, role }) {
   const { appId, appCertificate } = requireConfig();
   assertUserId(userId);
-  assertLiveSession(liveSessionId);
+  assertSessionForRtc(liveSessionId, role);
 
   if (role !== 'host' && role !== 'audience') {
     throw httpError('role must be host or audience', 400);

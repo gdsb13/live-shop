@@ -15,6 +15,10 @@ fail() { echo "FAIL: $1"; exit 1; }
 
 API="${API:-http://localhost:3001}"
 
+# shellcheck source=lib/test-shopper.sh
+source "$(dirname "$0")/lib/test-shopper.sh"
+SHOPPER_H=(-H "X-Shopper-Id: shopper-ai-test-tab")
+
 health="$(curl -sf "$API/health" 2>/dev/null || echo '{}')"
 echo "$health" | grep -q '"voiceAi":true' || fail "API missing voiceAi (stale server?) — run: ./scripts/stop.sh && ./scripts/start.sh"
 echo "$health" | grep -q '"mcp":true' || fail "API missing mcp feature flag"
@@ -58,11 +62,11 @@ pay="$(curl -sf -X POST "$API/api/ai/tools/getPaymentOptions" -H 'Content-Type: 
 echo "$pay" | grep -q 'options' || fail "payment options payload"
 pass "getPaymentOptions tool"
 
-cart="$(curl -sf -X POST "$API/api/ai/tools/addToCart" -H 'Content-Type: application/json' -d '{"productId":"elec-tv-samsung-55","variantId":"v-55","quantity":1}')"
+cart="$(curl -sf -X POST "${SHOPPER_H[@]}" "$API/api/ai/tools/addToCart" -H 'Content-Type: application/json' -d '{"productId":"elec-tv-samsung-55","variantId":"v-55","quantity":1,"context":{"shopperUserId":"shopper-ai-test-tab"}}')"
 echo "$cart" | grep -q '"success":true' || fail "addToCart success"
 pass "addToCart tool"
 
-remove="$(curl -sf -X POST "$API/api/ai/tools/removeFromCart" -H 'Content-Type: application/json' -d '{"productId":"elec-tv-samsung-55"}')"
+remove="$(curl -sf -X POST "${SHOPPER_H[@]}" "$API/api/ai/tools/removeFromCart" -H 'Content-Type: application/json' -d '{"productId":"elec-tv-samsung-55","context":{"shopperUserId":"shopper-ai-test-tab"}}')"
 echo "$remove" | grep -q '"success":true' || fail "removeFromCart success"
 pass "removeFromCart tool"
 

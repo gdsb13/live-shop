@@ -74,9 +74,23 @@ export default function CartPage() {
                     </button>
                   </div>
                 </div>
-                <div>
-                  <div>{formatInr(item.unitPrice)} each</div>
-                  <strong>{formatInr(item.lineTotal)}</strong>
+                <div className="cart-item-pricing">
+                  {item.discountEligible ? (
+                    <>
+                      <div className="cart-price-line muted">
+                        Original: {formatInr(item.listPrice ?? item.unitPrice)} each
+                      </div>
+                      <div className="cart-price-line live-discount-label">
+                        LIVE {item.discountPercent}%: -{formatInr(item.discountAmount || 0)}
+                      </div>
+                      <strong>Final: {formatInr(item.lineTotal)}</strong>
+                    </>
+                  ) : (
+                    <>
+                      <div>{formatInr(item.unitPrice)} each</div>
+                      <strong>{formatInr(item.lineTotal)}</strong>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -92,6 +106,12 @@ export default function CartPage() {
               <span>Subtotal</span>
               <strong>{formatInr(cart.subtotal)}</strong>
             </div>
+            {(cart.discountTotal || 0) > 0 && (
+              <div className="summary-line live-discount-label">
+                <span>LIVE savings</span>
+                <span>-{formatInr(cart.discountTotal || 0)}</span>
+              </div>
+            )}
             {message && <div className="message success">{message}</div>}
             {error && <div className="message error">{error}</div>}
             <Link className="button" href="/checkout" style={{ marginTop: 18, width: '100%' }}>

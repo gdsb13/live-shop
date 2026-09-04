@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useCart } from '@/components/CartProvider';
 import { api } from '@/lib/api';
 import { formatInr } from '@/lib/format';
@@ -10,6 +10,8 @@ import type { PaymentOption, Product, Serviceability } from '@/lib/types';
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const liveSessionId = searchParams.get('liveSession');
   const { refreshCart } = useCart();
   const [product, setProduct] = useState<Product | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState('');
@@ -24,7 +26,15 @@ export default function ProductDetailPage() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    Promise.all([api.getProduct(params.id), api.getPaymentOptions()])
+    Promise.all([
+      api.getProduct(
+        params.id,
+        liveSessionId
+          ? { originatingLiveSessionId: liveSessionId, variantId: undefined }
+          : undefined,
+      ),
+      api.getPaymentOptions(),
+    ])
       .then(([productData, paymentData]) => {
         if (!active) return;
         setProduct(productData);
@@ -43,7 +53,7 @@ export default function ProductDetailPage() {
     return () => {
       active = false;
     };
-  }, [params.id]);
+  }, [params.id, liveSessionId]);
 
   const selectedVariant = useMemo(
     () => product?.variants.find((v) => v.id === selectedVariantId) || null,
@@ -71,6 +81,7 @@ export default function ProductDetailPage() {
         productId: product.id,
         variantId: selectedVariant.id,
         quantity,
+        originatingLiveSessionId: liveSessionId || undefined,
       });
       await refreshCart();
       setMessage('Added to cart.');

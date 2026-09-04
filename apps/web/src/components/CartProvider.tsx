@@ -50,6 +50,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     refreshCart();
+    const interval = setInterval(() => {
+      refreshCart().catch(() => undefined);
+    }, 10000);
+    return () => clearInterval(interval);
   }, [refreshCart]);
 
   const value = useMemo(

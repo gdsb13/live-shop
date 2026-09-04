@@ -2,6 +2,7 @@
 
 const express = require('express');
 const catalogService = require('../services/catalogService');
+const discountService = require('../services/discountService');
 
 const router = express.Router();
 
@@ -26,6 +27,31 @@ router.get('/:id', (req, res, next) => {
       res.status(404).json({ error: 'Product not found' });
       return;
     }
+
+    const { variantId, originatingLiveSessionId, liveSessionId } = req.query;
+    const sessionId = originatingLiveSessionId || liveSessionId;
+    if (sessionId) {
+      const variant =
+        catalogService.resolveVariant(product, variantId) ||
+        catalogService.pickDefaultVariant(product);
+      if (variant) {
+        const livePricing = discountService.evaluateLineItem({
+          unitPrice: variant.price,
+          quantity: 1,
+          productId: product.id,
+          originatingLiveSessionId: String(sessionId),
+        });
+        res.json({
+          ...product,
+          livePricing: {
+            variantId: variant.id,
+            ...livePricing,
+          },
+        });
+        return;
+      }
+    }
+
     res.json(product);
   } catch (err) {
     next(err);

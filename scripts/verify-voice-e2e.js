@@ -174,6 +174,8 @@ async function runPass(passNumber) {
   pass(`pass ${passNumber}: session start greeting="${start.json.greeting}"`);
 
   const voiceChannel = start.json.channel;
+  const shopperUserId = `shopper-e2e-pass-${passNumber}`;
+  const shopperHeaders = { 'X-Shopper-Id': shopperUserId };
   const voiceHeaders = { 'X-Voice-Channel': voiceChannel };
   const mcpSessionId = await mcpInitialize();
   pass(`pass ${passNumber}: MCP initialize`);
@@ -320,7 +322,7 @@ async function runPass(passNumber) {
     `pass ${passNumber}: session poll cartUpdated + cart snapshot + greeting transcript`,
   );
 
-  const restCart = await json('GET', '/api/cart');
+  const restCart = await json('GET', '/api/cart', null, shopperHeaders);
   if (restCart.status !== 200 || !restCart.json.itemCount) {
     fail(`pass ${passNumber}: GET /api/cart empty after add ${restCart.body}`);
     return false;
@@ -357,7 +359,7 @@ async function runPass(passNumber) {
   }
   pass(`pass ${passNumber}: removeFromCart`);
 
-  const afterRemove = await json('GET', '/api/cart');
+  const afterRemove = await json('GET', '/api/cart', null, shopperHeaders);
   const stillHasIpad = (afterRemove.json.items || []).some(
     (item) => item.productId === 'elec-tablet-ipad',
   );

@@ -12,11 +12,20 @@ function httpError(message, status) {
   return err;
 }
 
+function assertBroadcastableSession(sessionId) {
+  const session = liveSessionService.getRawSessionById(sessionId);
+  if (!session) throw httpError('Live session not found', 404);
+  if (session.status === 'ENDED') {
+    throw httpError('Host broadcast is not available for ended sessions', 400);
+  }
+  return session;
+}
+
 function assertLiveSession(sessionId) {
-  const session = liveSessionService.getSessionById(sessionId);
+  const session = liveSessionService.getRawSessionById(sessionId);
   if (!session) throw httpError('Live session not found', 404);
   if (session.status !== 'LIVE') {
-    throw httpError('Host broadcast is only available while session is LIVE', 400);
+    throw httpError('Host broadcast heartbeat requires a LIVE session', 400);
   }
   return session;
 }
@@ -43,7 +52,7 @@ function getStatus(sessionId) {
 }
 
 function claimHost(sessionId, userId) {
-  assertLiveSession(sessionId);
+  assertBroadcastableSession(sessionId);
   if (!userId || typeof userId !== 'string' || !userId.startsWith('host-')) {
     throw httpError('Invalid host user id', 400);
   }

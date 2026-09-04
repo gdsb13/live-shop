@@ -5,9 +5,11 @@ import { useHostBroadcast } from '@/hooks/useHostBroadcast';
 export function HostBroadcastPanel({
   sessionId,
   sessionStatus,
+  onSessionChange,
 }: {
   sessionId: string;
   sessionStatus: string;
+  onSessionChange?: () => void | Promise<void>;
 }) {
   const {
     videoRef,
@@ -20,8 +22,14 @@ export function HostBroadcastPanel({
     goLive,
     toggleCamera,
     toggleMic,
-    stopBroadcast,
-  } = useHostBroadcast(sessionId, sessionStatus);
+    endBroadcast,
+  } = useHostBroadcast(sessionId, sessionStatus, onSessionChange);
+
+  const canGoLive =
+    (sessionStatus === 'SCHEDULED' || sessionStatus === 'LIVE') &&
+    state !== 'live' &&
+    !broadcastBlocked &&
+    sessionStatus !== 'ENDED';
 
   return (
     <div className="agora-panel panel">
@@ -51,7 +59,7 @@ export function HostBroadcastPanel({
       {broadcastBlocked && <div className="message info">{statusText}</div>}
 
       <div className="row" style={{ marginTop: 12 }}>
-        {sessionStatus === 'LIVE' && state !== 'live' && !broadcastBlocked && (
+        {canGoLive && (
           <button className="button" type="button" onClick={goLive}>
             Go live with camera + mic
           </button>
@@ -74,8 +82,8 @@ export function HostBroadcastPanel({
             >
               {cameraOn ? 'Stop video' : 'Start video'}
             </button>
-            <button className="button-secondary" type="button" onClick={stopBroadcast}>
-              End
+            <button className="button-secondary" type="button" onClick={endBroadcast}>
+              End broadcast
             </button>
           </>
         )}

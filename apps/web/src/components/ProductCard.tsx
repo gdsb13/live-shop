@@ -5,11 +5,20 @@ import { useState } from 'react';
 import type { ProductSummary } from '@/lib/types';
 import { formatInr, productImageUrl } from '@/lib/format';
 
-export function ProductCard({ product }: { product: ProductSummary }) {
+export function ProductCard({
+  product,
+  liveSessionId,
+}: {
+  product: ProductSummary;
+  liveSessionId?: string;
+}) {
   const [imgSrc, setImgSrc] = useState(productImageUrl(product.id, product.image));
+  const href = liveSessionId
+    ? `/products/${product.id}?liveSession=${encodeURIComponent(liveSessionId)}`
+    : `/products/${product.id}`;
 
   return (
-    <Link href={`/products/${product.id}`} className="product-card">
+    <Link href={href} className="product-card">
       <div className="product-image-wrap">
         <img
           src={imgSrc}
@@ -25,7 +34,14 @@ export function ProductCard({ product }: { product: ProductSummary }) {
         <h3>{product.name}</h3>
         <p className="brand">{product.brand}</p>
         <div className="product-card-footer">
-          <strong>{formatInr(product.priceFrom)}</strong>
+          {product.discountEligible && product.effectivePrice !== undefined ? (
+            <>
+              <strong>{formatInr(product.effectivePrice)}</strong>
+              <span className="live-discount-label">LIVE {product.discountPercent}%</span>
+            </>
+          ) : (
+            <strong>{formatInr(product.priceFrom)}</strong>
+          )}
           <span className="rating">★ {product.rating.toFixed(1)}</span>
         </div>
       </div>

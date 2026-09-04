@@ -4,8 +4,8 @@ const { randomUUID } = require('crypto');
 const cartService = require('./cartService');
 const paymentOptionsService = require('./paymentOptionsService');
 
-function checkout({ paymentMethod, deliveryPin }) {
-  const cart = cartService.getCart();
+function checkout({ paymentMethod, deliveryPin, shopperId }) {
+  const cart = cartService.getCart(shopperId);
 
   if (!cart.items.length) {
     const err = new Error('Cart is empty');
@@ -30,20 +30,27 @@ function checkout({ paymentMethod, deliveryPin }) {
     deliveryPin: deliveryPin || null,
     currency: cart.currency,
     subtotal: cart.subtotal,
+    discountTotal: cart.discountTotal || 0,
     items: cart.items.map((item) => ({
       productId: item.productId,
       variantId: item.variantId,
       productName: item.productName,
       variantName: item.variantName,
       quantity: item.quantity,
+      listPrice: item.listPrice ?? item.unitPrice,
       unitPrice: item.unitPrice,
+      discountEligible: Boolean(item.discountEligible),
+      discountPercent: item.discountPercent || 0,
+      discountAmount: item.discountAmount || 0,
+      effectiveUnitPrice: item.effectiveUnitPrice ?? item.unitPrice,
       lineTotal: item.lineTotal,
+      originatingLiveSessionId: item.originatingLiveSessionId || null,
     })),
     message: 'Mock checkout successful. No payment was processed.',
     createdAt: new Date().toISOString(),
   };
 
-  cartService.clearCart();
+  cartService.clearCart(shopperId);
   return order;
 }
 
