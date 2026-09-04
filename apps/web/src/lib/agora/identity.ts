@@ -46,6 +46,11 @@ export function voiceShopperUserId() {
   return `shopper-ai-${getPageClientId()}`;
 }
 
+/** Fresh numeric RTC/RTM UID for each voice session (avoids RTM -10027 on restart). */
+export function allocateVoiceShopperRtcUid(): number {
+  return Math.floor(100000 + Math.random() * 899999999);
+}
+
 /** Numeric Agora RTC UID for private Voice AI (stable per tab). ConvoAI requires numeric UIDs. */
 export function voiceShopperRtcUid(): number {
   if (typeof window === 'undefined') return 100001;

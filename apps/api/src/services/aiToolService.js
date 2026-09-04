@@ -31,6 +31,9 @@ function searchProducts({ query, category }) {
     search: query || undefined,
     category: category || undefined,
   });
+  console.log(
+    `[VoiceAI] searchProducts query=${JSON.stringify(query || '')} category=${JSON.stringify(category || '')} count=${products.length}`,
+  );
   return {
     count: products.length,
     products: products.slice(0, 5),

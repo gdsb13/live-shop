@@ -2,7 +2,6 @@ import type { IAgoraRTCClient, IRemoteAudioTrack } from 'agora-rtc-sdk-ng';
 import type { VoiceTranscriptLine } from './types';
 import {
   createVoiceRtmClient as acquireVoiceRtmClient,
-  releaseVoiceRtmClient,
 } from './rtmSession';
 
 type RtmEngine = {
@@ -11,7 +10,7 @@ type RtmEngine = {
   subscribe?: (channel: string) => Promise<unknown>;
 };
 
-export { releaseVoiceRtmClient };
+export { releaseVoiceRtmClient } from './rtmSession';
 
 export async function createVoiceRtmClient(
   appId: string,
@@ -69,12 +68,21 @@ export async function initVoiceAiToolkit(options: {
   onTranscripts: (lines: VoiceTranscriptLine[]) => void;
   onSpeaking: (active: boolean) => void;
   onThinking: (active: boolean) => void;
+  onAgentError?: (error: unknown) => void;
 }): Promise<VoiceAiRuntime> {
   const {
     AgoraVoiceAI,
     AgoraVoiceAIEvents,
     TranscriptHelperMode,
   } = await import('agora-agent-client-toolkit');
+
+  try {
+    const existing = AgoraVoiceAI.getInstance();
+    existing.unsubscribe?.();
+    existing.destroy?.();
+  } catch {
+    // No live singleton yet.
+  }
 
   const ai = await AgoraVoiceAI.init({
     rtcEngine: options.rtcClient,
@@ -101,6 +109,7 @@ export async function initVoiceAiToolkit(options: {
 
   ai.on(AgoraVoiceAIEvents.AGENT_ERROR, (_agentUserId, error) => {
     console.warn('[VoiceAI] Agent error:', error);
+    options.onAgentError?.(error);
   });
 
   ai.subscribeMessage(options.channel);
@@ -113,7 +122,6 @@ export async function initVoiceAiToolkit(options: {
       } catch {
         // Toolkit may already be destroyed.
       }
-      await releaseVoiceRtmClient();
     },
   };
 }

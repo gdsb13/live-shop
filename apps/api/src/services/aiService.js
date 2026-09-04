@@ -99,7 +99,7 @@ function watchAgentSession(sessionId, agentSession) {
     });
   };
 
-  const events = ['stopped', 'stop', 'idle', 'error', 'ended'];
+  const events = ['stopped', 'error'];
   for (const eventName of events) {
     if (typeof agentSession.on === 'function') {
       try {
@@ -154,19 +154,18 @@ async function startAgoraVoiceSession(sessionContext) {
     },
     turnDetection: {
       config: {
-        speech_threshold: 0.6,
+        speech_threshold: 0.4,
         start_of_speech: {
           mode: 'vad',
           vad_config: {
-            // Real barge-in after ~0.5s of speech; ignores greeting echo / noise.
-            interrupt_duration_ms: 480,
-            prefix_padding_ms: 300,
+            interrupt_duration_ms: 400,
+            prefix_padding_ms: 200,
           },
         },
         end_of_speech: {
           mode: 'vad',
           vad_config: {
-            silence_duration_ms: 640,
+            silence_duration_ms: 720,
           },
         },
       },
@@ -183,6 +182,10 @@ async function startAgoraVoiceSession(sessionContext) {
         model: openAiModel,
         systemMessages: [{ role: 'system', content: buildSystemPrompt(sessionContext) }],
         greetingMessage: ASSISTANT_GREETING,
+        maxHistory: 20,
+        params: {
+          parallel_tool_calls: false,
+        },
         mcpServers: buildMcpServers(mcpEndpoint, sessionContext.channel),
       }),
     )
@@ -193,7 +196,7 @@ async function startAgoraVoiceSession(sessionContext) {
       }),
     )
     .withParameters({
-      audio_scenario: 'chorus',
+      audio_scenario: 'default',
       data_channel: 'rtm',
       enable_metrics: true,
       enable_error_message: true,

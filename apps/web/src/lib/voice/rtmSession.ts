@@ -7,6 +7,7 @@ type RtmEngine = {
 
 let activeClient: RtmEngine | null = null;
 let activeChannel = '';
+let activeUserId = '';
 let releasePromise: Promise<void> | null = null;
 
 function sleep(ms: number) {
@@ -25,6 +26,7 @@ export async function releaseVoiceRtmClient(): Promise<void> {
   const channel = activeChannel;
   activeClient = null;
   activeChannel = '';
+  activeUserId = '';
 
   if (!client) return;
 
@@ -41,7 +43,7 @@ export async function releaseVoiceRtmClient(): Promise<void> {
     } catch {
       // RTM session may already be gone.
     }
-    await sleep(400);
+    await sleep(900);
   })();
 
   try {
@@ -62,7 +64,8 @@ export async function createVoiceRtmClient(
   const mod = await import('agora-rtm');
   const AgoraRTM = mod.default ?? mod;
   const RTM = AgoraRTM.RTM ?? AgoraRTM;
-  const client = new RTM(appId, String(rtcUid));
+  const userId = String(rtcUid);
+  const client = new RTM(appId, userId);
   await client.login({ token: rtmToken });
 
   if (typeof client.subscribe === 'function') {
@@ -75,5 +78,10 @@ export async function createVoiceRtmClient(
 
   activeClient = client;
   activeChannel = channel;
+  activeUserId = userId;
   return client;
+}
+
+export function getActiveVoiceRtmUserId(): string {
+  return activeUserId;
 }

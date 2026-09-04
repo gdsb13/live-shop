@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
-import { voiceShopperRtcUid, voiceShopperUserId } from '@/lib/agora/identity';
+import { allocateVoiceShopperRtcUid, voiceShopperUserId } from '@/lib/agora/identity';
 import { setLiveAudioDucked } from '@/lib/liveAudioBridge';
 import {
   createVoiceRtmClient,
@@ -18,8 +18,6 @@ import type {
   VoiceTranscriptLine,
 } from '@/lib/voice/types';
 import type { Cart } from '@/lib/types';
-
-const GREETING_MIC_MUTE_MS = 5000;
 
 function deriveContext(pathname: string) {
   const liveMatch = pathname.match(/^\/live\/([^/]+)$/);
@@ -115,34 +113,26 @@ export function useVoiceAssistant() {
   const [transcripts, setTranscripts] = useState<VoiceTranscriptLine[]>([]);
   const sessionIdRef = useRef('');
   const shopperUserIdRef = useRef(voiceShopperUserId());
-  const shopperRtcUidRef = useRef(voiceShopperRtcUid());
+  const shopperRtcUidRef = useRef(allocateVoiceShopperRtcUid());
   const agentUidRef = useRef<number | null>(null);
   const rtcClientRef = useRef<import('agora-rtc-sdk-ng').IAgoraRTCClient | null>(null);
   const micTrackRef = useRef<import('agora-rtc-sdk-ng').ILocalAudioTrack | null>(null);
   const voiceAiRuntimeRef = useRef<VoiceAiRuntime | null>(null);
   const audioAnchorRef = useRef<HTMLDivElement | null>(null);
-  const unmuteTimerRef = useRef<number | null>(null);
   const activeRef = useRef(false);
   const cartRefreshRef = useRef<(() => Promise<void>) | null>(null);
   const applyCartRef = useRef<((cart: Cart) => void) | null>(null);
 
   const cleanupVoiceStack = useCallback(async () => {
-    if (unmuteTimerRef.current) {
-      window.clearTimeout(unmuteTimerRef.current);
-      unmuteTimerRef.current = null;
-    }
-
     const voiceAiRuntime = voiceAiRuntimeRef.current;
     voiceAiRuntimeRef.current = null;
     if (voiceAiRuntime) {
-      await voiceAiRuntime.destroy();
-    } else {
-      await releaseVoiceRtmClient();
+      try {
+        await voiceAiRuntime.destroy();
+      } catch {
+        // Toolkit may already be torn down.
+      }
     }
-
-    micTrackRef.current?.stop();
-    micTrackRef.current?.close();
-    micTrackRef.current = null;
 
     const client = rtcClientRef.current;
     rtcClientRef.current = null;
@@ -155,6 +145,16 @@ export function useVoiceAssistant() {
         // ignore cleanup errors
       }
     }
+
+    await releaseVoiceRtmClient();
+
+    try {
+      micTrackRef.current?.stop();
+      micTrackRef.current?.close();
+    } catch {
+      // Track may already be closed.
+    }
+    micTrackRef.current = null;
   }, []);
 
   const handleSessionEnded = useCallback(
@@ -268,8 +268,6 @@ export function useVoiceAssistant() {
       const micTrack = await AgoraRTC.createMicrophoneAudioTrack();
       micTrackRef.current = micTrack;
       await client.publish([micTrack]);
-      // Mute uplink during greeting — publish requires an enabled track.
-      await micTrack.setMuted(true);
 
       const rtmClient = await createVoiceRtmClient(
         startPayload.appId,
@@ -295,6 +293,10 @@ export function useVoiceAssistant() {
           if (!activeRef.current) return;
           setState(active ? 'thinking' : 'listening');
         },
+        onAgentError: () => {
+          if (!activeRef.current) return;
+          setNotice('Assistant hit a brief error — you can keep speaking or tap Stop and try again.');
+        },
       });
 
       if (activeRef.current) setState('listening');
@@ -318,7 +320,7 @@ export function useVoiceAssistant() {
         }
         sessionIdRef.current = '';
         setPollSessionId('');
-        await new Promise((resolve) => window.setTimeout(resolve, 450));
+        await new Promise((resolve) => window.setTimeout(resolve, 900));
       }
 
       setError('');
@@ -332,6 +334,7 @@ export function useVoiceAssistant() {
 
       const context = deriveContext(pathname);
       const shopperUserId = shopperUserIdRef.current;
+      shopperRtcUidRef.current = allocateVoiceShopperRtcUid();
 
       try {
         const startPayload = await api.startVoiceAiSession({
@@ -369,12 +372,6 @@ export function useVoiceAssistant() {
         if (client) {
           await subscribeAgentAudio(client);
         }
-
-        unmuteTimerRef.current = window.setTimeout(() => {
-          unmuteTimerRef.current = null;
-          if (!activeRef.current) return;
-          micTrackRef.current?.setMuted(false).catch(() => undefined);
-        }, GREETING_MIC_MUTE_MS);
 
         setNotice('Private Agora voice session active. Speak naturally to the assistant.');
         if (activeRef.current) setState('listening');
@@ -430,11 +427,13 @@ export function useVoiceAssistant() {
 
   useEffect(() => {
     return () => {
-      if (!sessionIdRef.current) return;
+      if (!sessionIdRef.current && !rtcClientRef.current) return;
       activeRef.current = false;
-      stopAssistant().catch(() => undefined);
+      cleanupVoiceStack().catch(() => undefined);
     };
-  }, [stopAssistant]);
+    // Unmount-only: do not depend on callback identity or Fast Refresh will kill a live call.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     open,
