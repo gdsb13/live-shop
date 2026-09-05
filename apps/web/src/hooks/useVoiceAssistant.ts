@@ -205,9 +205,8 @@ export function useVoiceAssistant() {
 
   stopAssistantRef.current = stopAssistant;
 
-  const completeFarewellStop = useCallback((options?: { requireAssistantHeard?: boolean }) => {
-    if (!activeRef.current || !farewellPendingRef.current) return;
-    if (options?.requireAssistantHeard !== false && !farewellAssistantHeardRef.current) {
+  const completeFarewellStop = useCallback(() => {
+    if (!activeRef.current || !farewellPendingRef.current || !farewellAssistantHeardRef.current) {
       return;
     }
     stopAssistantRef.current?.('farewell').catch(() => undefined);
@@ -346,15 +345,6 @@ export function useVoiceAssistant() {
                 farewellAssistantHeardRef.current = false;
                 farewellAnchorTurnIdRef.current = latestUserTurn.turnId;
                 farewellReassertionsRef.current = 0;
-              } else if (
-                !farewellAssistantHeardRef.current &&
-                !thinkingActiveRef.current &&
-                !agentSpeakingRef.current
-              ) {
-                farewellReassertionsRef.current += 1;
-                if (farewellReassertionsRef.current >= 1) {
-                  completeFarewellStop({ requireAssistantHeard: false });
-                }
               }
             } else if (
               farewellPendingRef.current &&
@@ -377,9 +367,6 @@ export function useVoiceAssistant() {
               );
               if (laterAssistantTurn) {
                 farewellAssistantHeardRef.current = true;
-                if (!agentSpeakingRef.current && !thinkingActiveRef.current) {
-                  completeFarewellStop();
-                }
               }
             }
           }

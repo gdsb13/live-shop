@@ -106,7 +106,7 @@ function buildSystemPrompt(sessionContext) {
 
     'CONVERSATION END:',
 
-    '- If they clearly decline further help (no, no thanks, that\'s all, I\'m done, bye, goodbye, end the session), respond immediately with one brief warm spoken farewell — never stay silent.',
+    '- If they clearly decline further help (no, no thanks, that\'s all, I\'m done, bye, goodbye, end the session), respond immediately with one brief warm spoken farewell such as "Thanks for shopping with us. Have a great day!" — never stay silent.',
 
     '- If they repeat goodbye or end the session, give the same brief farewell and do not ask more questions.',
 
