@@ -83,7 +83,7 @@ search="$(curl -sf -X POST "${SHOPPER_H[@]}" "$API/api/ai/tools/searchProducts" 
   -d '{"query":"shoes","context":{"surface":"recorded","liveSessionId":"'"$RECORDED_ID"'","shopperUserId":"'"$SHOPPER_DEFAULT"'"}}')"
 echo "$search" | grep -q '"count":' || fail "recorded AI searchProducts"
 svc="$(curl -sf -X POST "${SHOPPER_H[@]}" "$API/api/ai/tools/checkServiceability" -H 'Content-Type: application/json' \
-  -d '{"pinCode":"201010","context":{"surface":"recorded","liveSessionId":"'"$RECORDED_ID"'","shopperUserId":"'"$SHOPPER_DEFAULT"'"}}')"
+  -d '{"pin":"201010","context":{"surface":"recorded","liveSessionId":"'"$RECORDED_ID"'","shopperUserId":"'"$SHOPPER_DEFAULT"'"}}')"
 echo "$svc" | grep -q '"serviceable":' || fail "recorded AI checkServiceability"
 pass "E recorded-session AI invokes commerce tools"
 

@@ -28,6 +28,16 @@ RUN_DIR="$ROOT/run"
 LOG_DIR="$ROOT/logs"
 mkdir -p "$RUN_DIR" "$LOG_DIR"
 
+REPLAY_DEMO="$ROOT/apps/web/public/replay/demo.mp4"
+if [[ ! -f "$REPLAY_DEMO" ]]; then
+  mkdir -p "$(dirname "$REPLAY_DEMO")"
+  if ! curl -fsL --max-time 60 \
+    "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" \
+    -o "$REPLAY_DEMO"; then
+    echo "start.sh: warning — could not download replay demo to $REPLAY_DEMO" >&2
+  fi
+fi
+
 is_running() {
   local pidfile="$1"
   [[ -f "$pidfile" ]] || return 1
