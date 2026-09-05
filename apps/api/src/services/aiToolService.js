@@ -9,13 +9,8 @@ const discountService = require('./discountService');
 const checkoutService = require('./checkoutService');
 const shopperContext = require('./shopperContext');
 const { ALLOWED_TOOL_NAMES } = require('./aiToolDefinitions');
-const { validateToolInput } = require('./aiToolValidation');
-
-function httpError(message, status) {
-  const err = new Error(message);
-  err.status = status;
-  return err;
-}
+const { validateToolInput, normalizePaymentMethod } = require('./aiToolValidation');
+const { recoverableToolError } = require('./toolResult');
 
 function pickDefaultVariant(product) {
   if (!product) return null;
@@ -30,9 +25,18 @@ function resolveProductVariant(product, variantHint) {
 }
 
 function searchProducts({ query, category }) {
+  const normalizedQuery = String(query || '').trim();
+  const normalizedCategory = String(category || '').trim();
+  if (!normalizedQuery && !normalizedCategory) {
+    return recoverableToolError(
+      'MISSING_SEARCH_QUERY',
+      "A search query is required. Infer a query from the user's current request and call searchProducts again.",
+    );
+  }
+
   const products = catalogService.listProducts({
-    search: query || undefined,
-    category: category || undefined,
+    search: normalizedQuery || undefined,
+    category: normalizedCategory || undefined,
   });
   return {
     count: products.length,
@@ -40,9 +44,61 @@ function searchProducts({ query, category }) {
   };
 }
 
+function compareProducts({ productIds }) {
+  if (productIds !== undefined && !Array.isArray(productIds)) {
+    return recoverableToolError(
+      'INVALID_PRODUCT_IDS',
+      'compareProducts productIds must be an array of product ids.',
+    );
+  }
+
+  const ids = Array.isArray(productIds)
+    ? productIds.map((id) => String(id || '').trim()).filter(Boolean)
+    : [];
+
+  if (ids.length < 2) {
+    return recoverableToolError(
+      'INSUFFICIENT_PRODUCTS',
+      'At least two products are required for comparison. Search the catalog for an alternative first.',
+    );
+  }
+
+  const products = catalogService.getProductsForComparison(ids);
+  if (products.length < 2) {
+    return recoverableToolError(
+      'INSUFFICIENT_PRODUCTS',
+      'At least two products are required for comparison. Search the catalog for an alternative first.',
+    );
+  }
+
+  return { products };
+}
+
 function getProduct({ productId }) {
-  const product = catalogService.getProductById(productId);
-  if (!product) throw httpError('Product not found', 404);
+  const resolvedProductId = catalogService.resolveProductId(productId);
+  if (!resolvedProductId) {
+    return recoverableToolError(
+      'MISSING_PRODUCT_ID',
+      'getProduct requires a productId. Search the catalog or reuse the last discussed product id.',
+    );
+  }
+
+  const product = catalogService.getProductById(resolvedProductId);
+  if (!product) {
+    return recoverableToolError(
+      'PRODUCT_NOT_FOUND',
+      'That product was not found. Search the catalog again for a valid product id.',
+    );
+  }
+
+  const defaultVariant = pickDefaultVariant(product);
+  const variants = product.variants.map((variant) => ({
+    id: variant.id,
+    name: variant.name,
+    price: variant.price,
+    inStock: variant.inStock,
+    attributes: variant.attributes,
+  }));
   return {
     id: product.id,
     name: product.name,
@@ -51,28 +107,24 @@ function getProduct({ productId }) {
     description: product.description,
     rating: product.rating,
     variantCount: product.variants.length,
-    specifications: product.specifications,
-    features: product.features,
-    variants: product.variants.map((variant) => ({
-      id: variant.id,
-      name: variant.name,
-      price: variant.price,
-      inStock: variant.inStock,
-      attributes: variant.attributes,
-    })),
-    defaultVariantId: (pickDefaultVariant(product) && pickDefaultVariant(product).id) || null,
+    variants,
+    variantsSummary: variants
+      .map((variant) => `${variant.name} (₹${variant.price.toLocaleString('en-IN')})`)
+      .join('; '),
+    defaultVariantId: defaultVariant ? defaultVariant.id : null,
+    defaultVariantName: defaultVariant ? defaultVariant.name : null,
+    defaultVariantPrice: defaultVariant ? defaultVariant.price : null,
   };
 }
 
-function compareProducts({ productIds }) {
-  const products = catalogService.getProductsForComparison(productIds);
-  if (products.length < 2) {
-    throw httpError('At least two valid product ids are required for comparison', 400);
-  }
-  return { products };
-}
-
 function checkServiceability({ pin }) {
+  if (!/^[1-9][0-9]{5}$/.test(String(pin || ''))) {
+    return recoverableToolError(
+      'INVALID_PIN',
+      'A valid six-digit Indian PIN code is required. Ask the shopper for their PIN and try again.',
+    );
+  }
+
   return serviceabilityService.checkServiceability(pin);
 }
 
@@ -121,10 +173,28 @@ function getCart(sessionContext = {}) {
 }
 
 function getCurrentPrice({ productId, variantId }, sessionContext = {}) {
+  if (!productId || typeof productId !== 'string') {
+    return recoverableToolError(
+      'MISSING_PRODUCT_ID',
+      'getCurrentPrice requires a productId. Search the catalog or reuse the last discussed product id.',
+    );
+  }
+
   const product = catalogService.getProductById(productId);
-  if (!product) throw httpError('Product not found', 404);
+  if (!product) {
+    return recoverableToolError(
+      'PRODUCT_NOT_FOUND',
+      'That product was not found. Search the catalog again for a valid product id.',
+    );
+  }
+
   const variant = resolveProductVariant(product, variantId);
-  if (!variant) throw httpError('Variant not found', 404);
+  if (!variant) {
+    return recoverableToolError(
+      'VARIANT_NOT_FOUND',
+      'That variant was not found. Call getProduct for valid variant ids or omit variantId for the default.',
+    );
+  }
 
   const originatingLiveSessionId = discountService.trustedLiveSessionId(sessionContext);
   const priced = discountService.evaluateLineItem({
@@ -153,17 +223,43 @@ function getCurrentPrice({ productId, variantId }, sessionContext = {}) {
 }
 
 function addToCart({ productId, variantId, quantity = 1 }, sessionContext = {}) {
+  if (!productId || typeof productId !== 'string') {
+    return recoverableToolError(
+      'MISSING_PRODUCT_ID',
+      'addToCart requires a productId. Search the catalog or reuse the last discussed product id.',
+    );
+  }
+
   const product = catalogService.getProductById(productId);
-  if (!product) throw httpError('Product not found', 404);
+  if (!product) {
+    return recoverableToolError(
+      'PRODUCT_NOT_FOUND',
+      'That product was not found. Search the catalog again before adding to cart.',
+    );
+  }
+
   const variant = resolveProductVariant(product, variantId);
-  if (!variant) throw httpError('Variant not found', 404);
+  if (!variant) {
+    return recoverableToolError(
+      'VARIANT_NOT_FOUND',
+      'That variant was not found. Call getProduct for valid variant ids or omit variantId for the default.',
+    );
+  }
+
+  const qty = Number(quantity);
+  if (!Number.isInteger(qty) || qty < 1 || qty > 10) {
+    return recoverableToolError(
+      'INVALID_QUANTITY',
+      'addToCart quantity must be an integer between 1 and 10.',
+    );
+  }
 
   const originatingLiveSessionId = discountService.trustedLiveSessionId(sessionContext);
   const shopperId = cartShopperId(sessionContext);
   const cart = cartService.addItem(shopperId, {
     productId,
     variantId: variant.id,
-    quantity,
+    quantity: qty,
     originatingLiveSessionId,
   });
   const sessionKey = originatingLiveSessionId || null;
@@ -177,7 +273,11 @@ function addToCart({ productId, variantId, quantity = 1 }, sessionContext = {}) 
   return {
     success: true,
     message: `Added ${product.name} (${variant.name}) to your cart`,
+    productId: product.id,
+    productName: product.name,
     variantId: variant.id,
+    variantName: variant.name,
+    listPrice: addedItem ? addedItem.listPrice : variant.price,
     resolvedFromHint: variantId && variant.id !== variantId ? variant.id : undefined,
     originatingLiveSessionId: originatingLiveSessionId || null,
     discountEligible: addedItem ? Boolean(addedItem.discountEligible) : false,
@@ -203,9 +303,11 @@ function removeFromCart({ productId } = {}, sessionContext = {}) {
   }
 
   if (!target) {
-    const err = new Error('I could not find that item in your cart.');
-    err.status = 404;
-    throw err;
+    return recoverableToolError(
+      'CART_ITEM_NOT_FOUND',
+      'I could not find that item in your cart. Call getCart to review current items.',
+      { cart: mapCartSummary(cart) },
+    );
   }
 
   const updated = cartService.removeItem(shopperId, target.id);
@@ -219,18 +321,62 @@ function removeFromCart({ productId } = {}, sessionContext = {}) {
 
 function checkoutOrder({ paymentMethod, deliveryPin } = {}, sessionContext = {}) {
   const shopperId = cartShopperId(sessionContext);
-  const order = checkoutService.checkout({ paymentMethod, deliveryPin, shopperId });
-  return {
-    success: true,
-    orderId: order.orderId,
-    status: order.status,
-    message: `Order ${order.orderId} confirmed. ${order.message}`,
-    subtotal: order.subtotal,
-    discountTotal: order.discountTotal || 0,
-    paymentMethod: order.paymentMethod,
-    deliveryPin: order.deliveryPin || null,
-    itemCount: order.items.length,
-  };
+  const cart = cartService.getCart(shopperId);
+
+  if (!cart.items.length) {
+    return recoverableToolError(
+      'EMPTY_CART',
+      'The cart is empty. Add items before attempting checkout.',
+      { cart: mapCartSummary(cart) },
+    );
+  }
+
+  const normalizedPaymentMethod = normalizePaymentMethod(paymentMethod);
+  if (!normalizedPaymentMethod || !['upi', 'card', 'cod'].includes(normalizedPaymentMethod)) {
+    return recoverableToolError(
+      paymentMethod ? 'INVALID_PAYMENT_METHOD' : 'MISSING_PAYMENT_METHOD',
+      paymentMethod
+        ? 'Payment method must be upi, card, or cod. Call getPaymentOptions and ask the shopper to choose.'
+        : 'Payment method is required before checkout. Call getPaymentOptions and ask which method the shopper prefers.',
+      { cart: mapCartSummary(cart) },
+    );
+  }
+
+  if (deliveryPin !== undefined && deliveryPin !== null && String(deliveryPin).trim() !== '') {
+    if (!/^[1-9][0-9]{5}$/.test(String(deliveryPin))) {
+      return recoverableToolError(
+        'INVALID_PIN',
+        'deliveryPin must be a valid six-digit Indian PIN when provided.',
+        { cart: mapCartSummary(cart) },
+      );
+    }
+  }
+
+  try {
+    const order = checkoutService.checkout({
+      paymentMethod: normalizedPaymentMethod,
+      deliveryPin,
+      shopperId,
+    });
+
+    return {
+      success: true,
+      orderId: order.orderId,
+      status: order.status,
+      message: `Order ${order.orderId} confirmed. ${order.message}`,
+      subtotal: order.subtotal,
+      discountTotal: order.discountTotal || 0,
+      paymentMethod: order.paymentMethod,
+      deliveryPin: order.deliveryPin || null,
+      itemCount: order.items.length,
+    };
+  } catch (err) {
+    return recoverableToolError(
+      'CHECKOUT_FAILED',
+      err.message || 'Checkout could not be completed. Ask the shopper to try again.',
+      { cart: mapCartSummary(cart) },
+    );
+  }
 }
 
 function buildLiveContext(liveSessionId) {
@@ -249,35 +395,42 @@ function buildLiveContext(liveSessionId) {
 
 // Execute the requested tool through the existing commerce service.
 function executeTool(toolName, args, sessionContext = {}) {
-  if (!ALLOWED_TOOL_NAMES.has(toolName)) {
-    throw httpError(`Tool "${toolName}" is not allowed`, 400);
-  }
+  try {
+    if (!ALLOWED_TOOL_NAMES.has(toolName)) {
+      return recoverableToolError('UNKNOWN_TOOL', `Tool "${toolName}" is not allowed`);
+    }
 
-  const input = validateToolInput(toolName, args);
+    const input = validateToolInput(toolName, args);
 
-  switch (toolName) {
-    case 'searchProducts':
-      return searchProducts(input);
-    case 'getProduct':
-      return getProduct(input);
-    case 'compareProducts':
-      return compareProducts(input);
-    case 'checkServiceability':
-      return checkServiceability(input);
-    case 'getPaymentOptions':
-      return getPaymentOptions();
-    case 'getCart':
-      return getCart(sessionContext);
-    case 'getCurrentPrice':
-      return getCurrentPrice(input, sessionContext);
-    case 'addToCart':
-      return addToCart(input, sessionContext);
-    case 'removeFromCart':
-      return removeFromCart(input, sessionContext);
-    case 'checkout':
-      return checkoutOrder(input, sessionContext);
-    default:
-      throw httpError(`Unsupported tool "${toolName}"`, 400);
+    switch (toolName) {
+      case 'searchProducts':
+        return searchProducts(input);
+      case 'getProduct':
+        return getProduct(input);
+      case 'compareProducts':
+        return compareProducts(input);
+      case 'checkServiceability':
+        return checkServiceability(input);
+      case 'getPaymentOptions':
+        return getPaymentOptions();
+      case 'getCart':
+        return getCart(sessionContext);
+      case 'getCurrentPrice':
+        return getCurrentPrice(input, sessionContext);
+      case 'addToCart':
+        return addToCart(input, sessionContext);
+      case 'removeFromCart':
+        return removeFromCart(input, sessionContext);
+      case 'checkout':
+        return checkoutOrder(input, sessionContext);
+      default:
+        return recoverableToolError('UNKNOWN_TOOL', `Unsupported tool "${toolName}"`);
+    }
+  } catch (err) {
+    return recoverableToolError(
+      'TOOL_EXECUTION_FAILED',
+      err.message || 'Tool execution failed',
+    );
   }
 }
 

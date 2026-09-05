@@ -47,10 +47,22 @@ async function mountMcpRoutes(app) {
         return;
       }
 
+      const method = req.body && req.body.method;
+      const toolName =
+        method === 'tools/call' && req.body.params ? req.body.params.name : undefined;
+      if (method) {
+        console.log(
+          `[VoiceAI] ${new Date().toISOString()} MCP ${method}${toolName ? ` tool=${toolName}` : ''}`,
+        );
+      }
+
       await runWithMcpHeaders(req.headers, async () => {
         await transport.handleRequest(req, res, req.body);
       });
     } catch (err) {
+      console.warn(
+        `[VoiceAI] ${new Date().toISOString()} MCP request failed: ${err.message || err}`,
+      );
       if (!res.headersSent) {
         res.status(500).json({ error: err.message || 'MCP request failed' });
       }

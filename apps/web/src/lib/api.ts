@@ -200,7 +200,11 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  stopVoiceAiSession: (body: { sessionId: string; shopperUserId: string }) =>
+  stopVoiceAiSession: (body: {
+    sessionId: string;
+    shopperUserId: string;
+    reason?: 'user_stop' | 'farewell';
+  }) =>
     request<{ stopped: boolean }>('/api/ai/session/stop', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -222,6 +226,9 @@ export const api = {
       surface: string;
       channel: string;
       cartUpdated: boolean;
+      orderCompleted?: boolean;
+      stopReason?: string | null;
+      endReason?: string | null;
       cart: import('./types').Cart;
       transcripts: import('./voice/types').VoiceTranscriptLine[];
     }>(`/api/ai/session/${encodeURIComponent(sessionId)}`),

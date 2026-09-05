@@ -66,15 +66,17 @@ export async function initVoiceAiToolkit(options: {
   });
 
   ai.on(AgoraVoiceAIEvents.AGENT_SPEAKING_CHANGED, (_agentUserId, active) => {
+    console.info(`[VoiceAI Client] ${new Date().toISOString()} event=agent_speaking active=${active}`);
     options.onSpeaking(active);
   });
 
   ai.on(AgoraVoiceAIEvents.AGENT_THINKING_CHANGED, (_agentUserId, active) => {
+    console.info(`[VoiceAI Client] ${new Date().toISOString()} event=agent_thinking active=${active}`);
     options.onThinking(active);
   });
 
   ai.on(AgoraVoiceAIEvents.AGENT_ERROR, (_agentUserId, error) => {
-    console.warn('[VoiceAI] Agent error:', error);
+    console.warn(`[VoiceAI Client] ${new Date().toISOString()} event=agent_error`, error);
     options.onAgentError?.(error);
   });
 

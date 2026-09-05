@@ -4,9 +4,10 @@ const aiSessionStore = require('../services/aiSessionStore');
 const { executeTool } = require('../services/aiToolService');
 const { ALLOWED_TOOL_NAMES } = require('../services/aiToolDefinitions');
 const { getMcpRequestHeaders } = require('./mcpRequestContext');
+const { recoverableToolError } = require('../services/toolResult');
 
 function productIdsFromToolResult(toolName, result) {
-  if (!result || typeof result !== 'object') return [];
+  if (!result || typeof result !== 'object' || result.success === false) return [];
 
   if (toolName === 'searchProducts' && Array.isArray(result.products)) {
     return result.products.map((product) => product.id).filter(Boolean);
@@ -46,19 +47,23 @@ function resolveSessionContext(headers) {
 
 function enrichToolArgs(toolName, args, sessionContext) {
   const next = { ...(args || {}) };
+  const discussedProductId =
+    sessionContext.lastDiscussedProductId || sessionContext.lastProductId || null;
 
   if (toolName === 'getProduct' && !next.productId) {
     if (sessionContext.productId) {
       next.productId = sessionContext.productId;
-    } else if (sessionContext.lastProductId) {
-      next.productId = sessionContext.lastProductId;
+    } else if (discussedProductId) {
+      next.productId = discussedProductId;
     } else if (Array.isArray(sessionContext.lastProductIds) && sessionContext.lastProductIds[0]) {
       next.productId = sessionContext.lastProductIds[0];
     }
   }
 
-  if (toolName === 'getCurrentPrice' && !next.productId && sessionContext.lastProductId) {
-    next.productId = sessionContext.lastProductId;
+  if (toolName === 'getCurrentPrice' && !next.productId) {
+    if (discussedProductId) {
+      next.productId = discussedProductId;
+    }
   }
   if (toolName === 'getCurrentPrice' && !next.variantId && sessionContext.lastVariantId) {
     next.variantId = sessionContext.lastVariantId;
@@ -81,9 +86,40 @@ function enrichToolArgs(toolName, args, sessionContext) {
     if (!next.deliveryPin && sessionContext.lastDeliveryPin) {
       next.deliveryPin = sessionContext.lastDeliveryPin;
     }
+    if (!next.paymentMethod && sessionContext.lastPaymentMethod) {
+      next.paymentMethod = sessionContext.lastPaymentMethod;
+    }
   }
 
   return next;
+}
+
+function logToolLifecycle(event, toolName, sessionContext, detail = {}) {
+  const timestamp = new Date().toISOString();
+  const sessionId = sessionContext.id || 'unknown';
+  const channel = sessionContext.channel || 'unknown';
+  console.log(
+    `[VoiceAI] ${timestamp} session=${sessionId} channel=${channel} tool=${toolName} event=${event}`,
+    JSON.stringify(detail),
+  );
+}
+
+function summarizeToolResult(result, err) {
+  if (err) {
+    return {
+      status: 'error',
+      httpStatus: err.status || 500,
+      message: err.message || 'Tool execution failed',
+    };
+  }
+  if (result && result.success === false) {
+    return {
+      status: 'recoverable',
+      code: result.code || 'TOOL_INPUT_ERROR',
+      message: result.message || 'Recoverable tool input error',
+    };
+  }
+  return { status: 'ok' };
 }
 
 // MCP adapter: validate and dispatch one allowlisted commerce tool.
@@ -106,28 +142,34 @@ function runCommerceTool(toolName, args, headers) {
     aiSessionStore.updateSession(sessionContext.id, sessionContext);
   }
 
-  console.log(
-    `[VoiceAI] MCP tool requested: ${toolName}`,
-    JSON.stringify(enrichedArgs),
-    `channel=${sessionContext.channel || 'unknown'}`,
-  );
+  logToolLifecycle('tool_call_requested', toolName, sessionContext, enrichedArgs);
 
   let result;
   try {
     result = executeTool(toolName, enrichedArgs, sessionContext);
-    console.log('[VoiceAI] MCP tool result: success');
+    logToolLifecycle(
+      'tool_call_completed',
+      toolName,
+      sessionContext,
+      summarizeToolResult(result),
+    );
   } catch (err) {
-    console.log(`[VoiceAI] MCP tool result: error (${err.message})`);
-    throw err;
+    logToolLifecycle('tool_call_failed', toolName, sessionContext, summarizeToolResult(null, err));
+    result = recoverableToolError(
+      'TOOL_EXECUTION_FAILED',
+      err.message || 'Tool execution failed',
+    );
   }
 
   if (toolName === 'getProduct' && result && result.id) {
+    sessionContext.lastDiscussedProductId = result.id;
     sessionContext.lastProductId = result.id;
     if (result.defaultVariantId) {
       sessionContext.lastVariantId = result.defaultVariantId;
     }
   }
-  if (toolName === 'getCurrentPrice' && result && result.variantId) {
+  if (toolName === 'getCurrentPrice' && result && result.productId && result.success !== false) {
+    sessionContext.lastDiscussedProductId = result.productId;
     sessionContext.lastProductId = result.productId;
     sessionContext.lastVariantId = result.variantId;
   }
@@ -136,6 +178,14 @@ function runCommerceTool(toolName, args, headers) {
     sessionContext.lastDeliveryPin = result.pin;
     if (sessionContext.id) {
       aiSessionStore.updateSession(sessionContext.id, sessionContext);
+    }
+  }
+
+  if (toolName === 'checkout' && enrichedArgs.paymentMethod) {
+    const { normalizePaymentMethod } = require('../services/aiToolValidation');
+    const method = normalizePaymentMethod(enrichedArgs.paymentMethod);
+    if (['upi', 'card', 'cod'].includes(method)) {
+      sessionContext.lastPaymentMethod = method;
     }
   }
 
@@ -148,13 +198,20 @@ function runCommerceTool(toolName, args, headers) {
       }
       aiSessionStore.updateSession(sessionContext.id, sessionContext);
     }
-    console.log('[VoiceAI] Cart mutation: success');
+    logToolLifecycle('cart_mutation_ok', toolName, sessionContext, {
+      orderId: result.orderId || null,
+    });
   }
 
   const remembered = productIdsFromToolResult(toolName, result);
   if (remembered.length > 0 && sessionContext.id) {
     sessionContext.lastProductIds = remembered;
+    if (toolName === 'searchProducts') {
+      sessionContext.lastDiscussedProductId = remembered[0];
+    }
     sessionContext.lastProductId = remembered[0];
+    aiSessionStore.updateSession(sessionContext.id, sessionContext);
+  } else if (sessionContext.id && (sessionContext.lastDiscussedProductId || sessionContext.lastProductId)) {
     aiSessionStore.updateSession(sessionContext.id, sessionContext);
   }
 

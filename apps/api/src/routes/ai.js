@@ -40,8 +40,8 @@ router.post('/session/activate', async (req, res, next) => {
 
 router.post('/session/stop', async (req, res, next) => {
   try {
-    const { sessionId, shopperUserId } = req.body || {};
-    const payload = await aiService.stopVoiceSession(sessionId, shopperUserId);
+    const { sessionId, shopperUserId, reason } = req.body || {};
+    const payload = await aiService.stopVoiceSession(sessionId, shopperUserId, { reason });
     res.json(payload);
   } catch (err) {
     next(err);

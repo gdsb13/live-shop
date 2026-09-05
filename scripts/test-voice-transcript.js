@@ -32,14 +32,12 @@ function mapSdkTranscriptSnapshot(items, shopperRtcUid) {
   return order.map((key) => latestByKey.get(key));
 }
 
-function buildDisplayTranscript(snapshot, { agentSpeaking, fillerLine = null }) {
+function buildDisplayTranscript(snapshot, { agentSpeaking, agentThinking = false }) {
   const lines = [];
+  const showInterimAssistant = agentSpeaking || agentThinking;
   for (const item of snapshot) {
-    if (item.role === 'assistant' && !item.final && !agentSpeaking) continue;
+    if (item.role === 'assistant' && !item.final && !showInterimAssistant) continue;
     lines.push({ role: item.role, text: item.text, final: item.final, turnId: item.turnId });
-  }
-  if (fillerLine && !lines.some((line) => line.filler && line.text === fillerLine.text)) {
-    lines.push(fillerLine);
   }
   return lines;
 }
@@ -93,20 +91,84 @@ if (duplicateFinal.length !== 1) fail('identical final events must not duplicate
 
 const hiddenInterim = buildDisplayTranscript(
   [{ role: 'assistant', turnId: 0, text: 'Hi, I am Priya', final: false, status: TurnStatus.IN_PROGRESS }],
-  { agentSpeaking: false },
+  { agentSpeaking: false, agentThinking: false },
 );
-if (hiddenInterim.length !== 0) fail('interim assistant hidden until agent speaks');
+if (hiddenInterim.length !== 0) fail('interim assistant hidden while idle');
+
+const visibleWhileThinking = buildDisplayTranscript(
+  [{ role: 'assistant', turnId: 0, text: 'Hi, I am Priya', final: false, status: TurnStatus.IN_PROGRESS }],
+  { agentSpeaking: false, agentThinking: true },
+);
+if (visibleWhileThinking.length !== 1) fail('assistant interim visible while thinking');
 
 const visibleInterim = buildDisplayTranscript(
   [{ role: 'assistant', turnId: 0, text: 'Hi, I am Priya', final: false, status: TurnStatus.IN_PROGRESS }],
-  { agentSpeaking: true },
+  { agentSpeaking: true, agentThinking: false },
 );
 if (visibleInterim.length !== 1) fail('assistant interim visible while speaking');
 
-const fillerOnce = buildDisplayTranscript([], {
-  agentSpeaking: false,
-  fillerLine: { role: 'assistant', text: 'Let me check that for you.', final: true, filler: true },
-});
-if (fillerOnce.length !== 1 || !fillerOnce[0].filler) fail('filler is one intentional turn');
+function isUserGoodbyeContinuation(text) {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+  return (
+    /^thanks?(\s+you)?(\s+very\s+much)?\.?$/.test(normalized) ||
+    /^thank you(\s+very\s+much)?\.?$/.test(normalized)
+  );
+}
+
+function shouldCancelFarewellPending(text) {
+  if (/^(are you there|you there|hello|hello\??|hi\??)\b/.test(text.trim().toLowerCase())) return false;
+  if (isUserGoodbyeIntent(text)) return false;
+  if (isUserGoodbyeContinuation(text)) return false;
+  return true;
+}
+
+function findFinalAssistantTurnAfterUserTurn(snapshot, userTurn) {
+  const anchorIndex = snapshot.findIndex(
+    (item) => item.role === 'user' && item.turnId === userTurn.turnId,
+  );
+  if (anchorIndex < 0) return undefined;
+  return snapshot.slice(anchorIndex + 1).find((item) => item.role === 'assistant' && item.final);
+}
+
+function isUserGoodbyeIntent(text, options = {}) {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+  if (
+    /\b(bye|goodbye|good\s+bye)\b/.test(normalized) ||
+    /\b(that'?s all|that is all|that'?s it|that is it)\b/.test(normalized) ||
+    /\b(end (the )?(conversation|session)|stop talking)\b/.test(normalized) ||
+    /\b(no thanks|no thank you|nothing else|i'?m done|im done)\b/.test(normalized) ||
+    /\bno\b[\s,.!]*\b(thanks?|thank you)\b/.test(normalized) ||
+    /^(stop|thanks\.?\s*|thank you\.?\s*)$/.test(normalized) ||
+    isUserGoodbyeContinuation(text)
+  ) {
+    return true;
+  }
+  if (options.orderCompleted && /^no[\s,.!]*\.?\s*$/.test(normalized)) return true;
+  return false;
+}
+
+if (!isUserGoodbyeIntent('No. That is it.')) fail('that is it should close the session');
+if (!isUserGoodbyeIntent('No. Thank you.')) fail('no thank you should close the session');
+if (!isUserGoodbyeIntent('No.', { orderCompleted: true })) fail('no after order should close');
+if (isUserGoodbyeIntent('No.', { orderCompleted: false })) fail('plain no before order should not close');
+if (!isUserGoodbyeIntent("Yeah. That's all. Thank you.")) fail("that's all thank you should close");
+if (!isUserGoodbyeIntent('You can end the session.')) fail('end the session should close');
+if (!isUserGoodbyeIntent("That's all. Thanks.")) fail("that's all thanks should close");
+if (!isUserGoodbyeIntent('Goodbye.')) fail('goodbye should close');
+if (isUserGoodbyeIntent('Are you there?')) fail('presence check is not goodbye');
+if (shouldCancelFarewellPending('Thank you very much.')) fail('extra thanks should not cancel farewell');
+if (shouldCancelFarewellPending('Are you there?')) fail('presence check should not cancel farewell');
+if (!shouldCancelFarewellPending('Show me earbuds')) fail('new shopping request should cancel farewell');
+
+const farewellSnapshot = [
+  { role: 'user', turnId: 3, text: "No. That's it. Thank you.", final: true },
+  { role: 'assistant', turnId: 4, text: 'Happy shopping! You can keep watching the live session.', final: true },
+];
+const anchor = farewellSnapshot[0];
+if (!findFinalAssistantTurnAfterUserTurn(farewellSnapshot, anchor)) {
+  fail('assistant farewell should be found after goodbye user turn');
+}
 
 console.log('PASS: voice transcript turn semantics');

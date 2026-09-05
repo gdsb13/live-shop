@@ -3,52 +3,25 @@
 const z = require('zod/v4');
 const { AI_TOOL_DEFINITIONS } = require('../services/aiToolDefinitions');
 const { runCommerceTool } = require('./commerceToolRunner');
+const { recoverableToolError } = require('../services/toolResult');
 
-function jsonSchemaPropertyToZod(propertySchema, isRequired) {
-  let schema;
-
-  if (propertySchema.type === 'array') {
-    const itemSchema = propertySchema.items || { type: 'string' };
-    schema = z.array(jsonSchemaPropertyToZod(itemSchema, true));
-    if (propertySchema.minItems != null) {
-      schema = schema.min(propertySchema.minItems);
-    }
-    if (propertySchema.maxItems != null) {
-      schema = schema.max(propertySchema.maxItems);
-    }
-  } else if (propertySchema.type === 'integer') {
-    schema = z.number().int();
-    if (propertySchema.minimum != null) {
-      schema = schema.min(propertySchema.minimum);
-    }
-    if (propertySchema.maximum != null) {
-      schema = schema.max(propertySchema.maximum);
-    }
-  } else {
-    schema = z.string();
-  }
-
-  if (propertySchema.description) {
-    schema = schema.describe(propertySchema.description);
-  }
-
-  if (!isRequired) {
-    schema = schema.optional();
-  }
-
-  return schema;
-}
-
-function jsonSchemaParametersToZodShape(parameters) {
+function toolInputSchema(parameters) {
   const properties = (parameters && parameters.properties) || {};
-  const required = new Set((parameters && parameters.required) || []);
   const shape = {};
 
+  // Advertise documented argument names, but accept any JSON value and extra keys.
+  // Agora validates tools/list JSON Schema before HTTP; `additionalProperties: false`
+  // or `type: string` rejects typical LLM checkout payloads and kills the voice turn
+  // before our handler (so we never even log tool_call_requested).
   for (const [name, propertySchema] of Object.entries(properties)) {
-    shape[name] = jsonSchemaPropertyToZod(propertySchema, required.has(name));
+    let field = z.any().optional();
+    if (propertySchema && propertySchema.description) {
+      field = field.describe(propertySchema.description);
+    }
+    shape[name] = field;
   }
 
-  return shape;
+  return z.looseObject(shape);
 }
 
 async function createCommerceMcpServer() {
@@ -64,7 +37,7 @@ async function createCommerceMcpServer() {
       tool.name,
       {
         description: tool.description,
-        inputSchema: jsonSchemaParametersToZodShape(tool.parameters),
+        inputSchema: toolInputSchema(tool.parameters),
       },
       async (args) => {
         try {
@@ -74,8 +47,17 @@ async function createCommerceMcpServer() {
           };
         } catch (err) {
           return {
-            isError: true,
-            content: [{ type: 'text', text: err.message || 'Tool execution failed' }],
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  recoverableToolError(
+                    'TOOL_EXECUTION_FAILED',
+                    err.message || 'Tool execution failed',
+                  ),
+                ),
+              },
+            ],
           };
         }
       },

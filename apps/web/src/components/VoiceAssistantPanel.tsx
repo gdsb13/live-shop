@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { Mic, MicOff } from 'lucide-react';
 import { useCart } from '@/components/CartProvider';
 import { useVoiceAssistant } from '@/hooks/useVoiceAssistant';
@@ -13,16 +14,25 @@ const STATE_LABELS: Record<VoiceDisplayState, string> = {
   listening: 'Listening',
   thinking: 'Thinking…',
   speaking: 'Speaking',
+  ended: 'Chat ended',
   muted: 'Muted',
   error: 'Error',
 };
+
+const NEAR_BOTTOM_THRESHOLD_PX = 80;
 
 function resolveDisplayState(
   state: VoiceAssistantState,
   micMuted: boolean,
   sessionActive: boolean,
 ): VoiceDisplayState {
-  if (state === 'error' || state === 'connecting' || state === 'speaking' || state === 'thinking') {
+  if (
+    state === 'error' ||
+    state === 'connecting' ||
+    state === 'speaking' ||
+    state === 'thinking' ||
+    state === 'ended'
+  ) {
     return state;
   }
   if (micMuted && sessionActive) return 'muted';
@@ -40,13 +50,39 @@ export function VoiceAssistantPanel() {
     audioAnchorRef,
     startAssistant,
     stopAssistant,
+    dismissPanel,
     toggleVoiceMicMuted,
     micMuted,
     setOpen,
   } = useVoiceAssistant();
 
-  const sessionActive = open && state !== 'idle' && state !== 'error';
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const transcriptBottomRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
+
+  const sessionActive =
+    open && state !== 'idle' && state !== 'error' && state !== 'ended';
   const displayState = resolveDisplayState(state, micMuted, sessionActive);
+  const orbState = displayState === 'ended' ? 'idle' : displayState;
+
+  useEffect(() => {
+    const container = transcriptRef.current;
+    if (!container) return undefined;
+
+    const onScroll = () => {
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      userScrolledUpRef.current = distanceFromBottom > NEAR_BOTTOM_THRESHOLD_PX;
+    };
+
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => container.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (userScrolledUpRef.current) return;
+    transcriptBottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [transcripts]);
 
   if (!open && state === 'idle') {
     return (
@@ -68,14 +104,20 @@ export function VoiceAssistantPanel() {
           <strong>Voice Assistant</strong>
           <span className="voice-ai-panel__state">{STATE_LABELS[displayState]}</span>
         </div>
-        <button type="button" className="voice-ai-panel__close" onClick={() => stopAssistant()}>
-          Stop
-        </button>
+        {sessionActive ? (
+          <button type="button" className="voice-ai-panel__close" onClick={() => stopAssistant()}>
+            Stop
+          </button>
+        ) : state === 'ended' ? (
+          <button type="button" className="voice-ai-panel__close" onClick={() => dismissPanel()}>
+            Close
+          </button>
+        ) : null}
       </header>
 
       <div className="voice-ai-panel__status">
         <div
-          className={`voice-ai-orb voice-ai-orb--${displayState}`}
+          className={`voice-ai-orb voice-ai-orb--${orbState}`}
           role="status"
           aria-label={STATE_LABELS[displayState]}
         />
@@ -84,7 +126,7 @@ export function VoiceAssistantPanel() {
       {notice ? <p className="voice-ai-panel__notice">{notice}</p> : null}
       {error ? <p className="voice-ai-panel__error">{error}</p> : null}
 
-      <div className="voice-ai-panel__transcript">
+      <div ref={transcriptRef} className="voice-ai-panel__transcript">
         {transcripts.length === 0 ? (
           <p className="voice-ai-panel__placeholder">Your conversation will appear here.</p>
         ) : (
@@ -98,6 +140,7 @@ export function VoiceAssistantPanel() {
             </p>
           ))
         )}
+        <div ref={transcriptBottomRef} aria-hidden="true" />
       </div>
 
       {sessionActive ? (
@@ -128,6 +171,16 @@ export function VoiceAssistantPanel() {
           }}
         >
           Try again
+        </button>
+      ) : null}
+
+      {state === 'ended' ? (
+        <button
+          type="button"
+          className="voice-ai-panel__retry"
+          onClick={() => startAssistant(refreshCart, applyCart)}
+        >
+          Start again
         </button>
       ) : null}
     </aside>

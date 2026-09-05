@@ -91,7 +91,11 @@ function watchAgentSession(sessionId, agentSession) {
   const markEnded = (reason) => {
     const record = aiSessionStore.getSession(sessionId);
     if (!record || record.state === 'ended') return;
-    console.log(`[VoiceAI] Agent ended session=${sessionId} reason=${reason}`);
+    const startedAt = record.createdAt ? Date.parse(record.createdAt) : NaN;
+    const durationMs = Number.isFinite(startedAt) ? Date.now() - startedAt : null;
+    console.log(
+      `[VoiceAI] ${new Date().toISOString()} Agent ended session=${sessionId} reason=${reason} durationMs=${durationMs ?? 'unknown'} clientStopReason=${record.stopReason || 'none'}`,
+    );
     aiSessionStore.updateSession(sessionId, {
       ...record,
       state: 'ended',
@@ -166,7 +170,7 @@ async function startAgoraVoiceSession(sessionContext) {
         end_of_speech: {
           mode: 'vad',
           vad_config: {
-            silence_duration_ms: 720,
+            silence_duration_ms: 550,
           },
         },
       },
@@ -306,12 +310,18 @@ async function activateVoiceSession(sessionId, shopperUserId) {
   };
 }
 
-async function stopVoiceSession(sessionId, shopperUserId) {
+async function stopVoiceSession(sessionId, shopperUserId, options = {}) {
   const record = aiSessionStore.getSession(sessionId);
   if (!record) throw httpError('Voice AI session not found', 404);
   if (record.shopperUserId !== shopperUserId) {
     throw httpError('Not authorized for this voice session', 403);
   }
+
+  const stopReason = options.reason || 'client_requested';
+  console.log(
+    `[VoiceAI] ${new Date().toISOString()} stopVoiceSession session=${sessionId} reason=${stopReason}`,
+  );
+  aiSessionStore.updateSession(sessionId, { ...record, stopReason });
 
   if (record.agentSession) {
     try {
@@ -322,7 +332,7 @@ async function stopVoiceSession(sessionId, shopperUserId) {
     }
   }
 
-  aiSessionStore.updateSession(sessionId, { ...record, state: 'ended', agentSession: null });
+  aiSessionStore.updateSession(sessionId, { ...record, state: 'ended', agentSession: null, stopReason });
   aiSessionStore.deleteSession(sessionId);
   return { stopped: true };
 }
@@ -343,6 +353,8 @@ function getVoiceSession(sessionId) {
     cartUpdated,
     orderCompleted: Boolean(record.orderCompleted),
     lastOrderId: record.lastOrderId || null,
+    stopReason: record.stopReason || null,
+    endReason: record.endReason || null,
     cart: cartService.getCart(record.shopperUserId),
     transcripts: Array.isArray(record.transcripts) ? record.transcripts.slice(-20) : [],
   };

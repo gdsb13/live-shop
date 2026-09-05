@@ -204,6 +204,17 @@ async function main() {
     }
     pass('MCP tools/list exposes all commerce tools');
 
+    const checkoutTool = (tools.result.tools || []).find((tool) => tool.name === 'checkout');
+    const checkoutSchema = checkoutTool && checkoutTool.inputSchema;
+    if (!checkoutSchema || checkoutSchema.additionalProperties === false) {
+      fail(
+        `checkout JSON schema must allow extra properties (Agora validates tools/list before HTTP): ${JSON.stringify(checkoutSchema)}`,
+      );
+      return;
+    }
+    pass('MCP checkout schema allows additional properties');
+
+
     const search = await mcpCall(
       port,
       sessionId,
@@ -469,15 +480,118 @@ async function main() {
       { 'mcp-session-id': sessionId },
     );
     const badPinJson = JSON.parse(badPin.body);
-    const rejected =
+    const badPinText = badPinJson.result?.content?.[0]?.text;
+    const badPinResult = badPinText ? JSON.parse(badPinText) : null;
+    if (
       badPin.status !== 200 ||
       Boolean(badPinJson.error) ||
-      Boolean(badPinJson.result && badPinJson.result.isError);
-    if (!rejected) {
-      fail('invalid PIN should be rejected by MCP tool validation');
+      Boolean(badPinJson.result && badPinJson.result.isError) ||
+      !badPinResult ||
+      badPinResult.code !== 'INVALID_PIN'
+    ) {
+      fail(`invalid PIN should return recoverable MCP tool result: ${badPin.body}`);
       return;
     }
-    pass('MCP rejects invalid tool arguments');
+    pass('MCP returns recoverable invalid PIN tool result');
+
+    const checkoutRecover = await request(
+      port,
+      'POST',
+      '/mcp',
+      {
+        jsonrpc: '2.0',
+        id: 12,
+        method: 'tools/call',
+        params: { name: 'checkout', arguments: {} },
+      },
+      { 'mcp-session-id': sessionId, 'x-shopper-id': 'mcp-test-shopper' },
+    );
+    const checkoutRecoverJson = JSON.parse(checkoutRecover.body);
+    const checkoutRecoverText = checkoutRecoverJson.result?.content?.[0]?.text;
+    const checkoutRecoverResult = checkoutRecoverText ? JSON.parse(checkoutRecoverText) : null;
+    if (
+      checkoutRecover.status !== 200 ||
+      Boolean(checkoutRecoverJson.result && checkoutRecoverJson.result.isError) ||
+      !checkoutRecoverResult ||
+      checkoutRecoverResult.code !== 'MISSING_PAYMENT_METHOD'
+    ) {
+      fail(`checkout without payment should return recoverable MCP tool result: ${checkoutRecover.body}`);
+      return;
+    }
+    pass('MCP checkout without payment returns recoverable tool result');
+
+    const addForCheckout = await mcpCall(
+      port,
+      sessionId,
+      'tools/call',
+      { name: 'addToCart', arguments: { productId: 'elec-phone-oneplus' } },
+      13,
+      voiceHeaders,
+    );
+    if (!parseToolText(addForCheckout) || parseToolText(addForCheckout).success === false) {
+      fail(`addToCart before coerced checkout failed: ${JSON.stringify(addForCheckout)}`);
+      return;
+    }
+
+    const checkoutCoerced = await mcpCall(
+      port,
+      sessionId,
+      'tools/call',
+      {
+        name: 'checkout',
+        arguments: { paymentMethod: 'upi', deliveryPin: 560001 },
+      },
+      14,
+      voiceHeaders,
+    );
+    const checkoutCoercedResult = parseToolText(checkoutCoerced);
+    if (
+      checkoutCoerced.error ||
+      (checkoutCoerced.result && checkoutCoerced.result.isError) ||
+      !checkoutCoercedResult ||
+      !checkoutCoercedResult.orderId
+    ) {
+      fail(
+        `checkout with numeric deliveryPin should succeed without isError: ${JSON.stringify(checkoutCoerced)}`,
+      );
+      return;
+    }
+    pass('MCP checkout accepts numeric deliveryPin without isError');
+
+    const checkoutExtra = await mcpCall(
+      port,
+      sessionId,
+      'tools/call',
+      {
+        name: 'checkout',
+        arguments: {
+          paymentMethod: 'card',
+          confirm: true,
+          placeOrder: true,
+          extra: 'yes',
+        },
+      },
+      15,
+      voiceHeaders,
+    );
+    if (checkoutExtra.error) {
+      fail(
+        `checkout with extra LLM fields must not be an MCP protocol error: ${JSON.stringify(checkoutExtra)}`,
+      );
+      return;
+    }
+    if (checkoutExtra.result && checkoutExtra.result.isError) {
+      fail(`checkout with extra LLM fields must not set isError: ${JSON.stringify(checkoutExtra)}`);
+      return;
+    }
+    const checkoutExtraResult = parseToolText(checkoutExtra);
+    if (!checkoutExtraResult || (!checkoutExtraResult.orderId && checkoutExtraResult.code !== 'EMPTY_CART')) {
+      fail(
+        `checkout with extra fields should complete or return recoverable EMPTY_CART, got ${JSON.stringify(checkoutExtra)}`,
+      );
+      return;
+    }
+    pass('MCP checkout ignores extra LLM argument fields');
 
     console.log('\nMCP commerce tool verification complete.');
   } finally {

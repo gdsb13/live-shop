@@ -81,13 +81,14 @@ export function buildDisplayTranscript(
   snapshot: SdkTranscriptItem[],
   options: {
     agentSpeaking: boolean;
-    fillerLine?: VoiceTranscriptLine | null;
+    agentThinking?: boolean;
   },
 ): VoiceTranscriptLine[] {
   const lines: VoiceTranscriptLine[] = [];
+  const showInterimAssistant = options.agentSpeaking || Boolean(options.agentThinking);
 
   for (const item of snapshot) {
-    if (item.role === 'assistant' && !item.final && !options.agentSpeaking) {
+    if (item.role === 'assistant' && !item.final && !showInterimAssistant) {
       continue;
     }
     lines.push({
@@ -97,15 +98,6 @@ export function buildDisplayTranscript(
       final: item.final,
       turnId: item.turnId,
     });
-  }
-
-  if (options.fillerLine) {
-    const alreadyPresent = lines.some(
-      (line) => line.filler && line.text === options.fillerLine?.text,
-    );
-    if (!alreadyPresent) {
-      lines.push(options.fillerLine);
-    }
   }
 
   return lines.slice(-40);
@@ -120,6 +112,40 @@ export function latestUserTurnId(snapshot: SdkTranscriptItem[]): number | null {
   return null;
 }
 
+export function isUserPresenceCheck(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  return /^(are you there|you there|hello|hello\??|hi\??)\b/.test(normalized);
+}
+
+export function isUserGoodbyeContinuation(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+  return (
+    /^thanks?(\s+you)?(\s+very\s+much)?\.?$/.test(normalized) ||
+    /^thank you(\s+very\s+much)?\.?$/.test(normalized)
+  );
+}
+
+export function shouldCancelFarewellPending(text: string): boolean {
+  if (isUserPresenceCheck(text)) return false;
+  if (isUserGoodbyeIntent(text)) return false;
+  if (isUserGoodbyeContinuation(text)) return false;
+  return true;
+}
+
+export function findFinalAssistantTurnAfterUserTurn(
+  snapshot: SdkTranscriptItem[],
+  userTurn: SdkTranscriptItem,
+): SdkTranscriptItem | undefined {
+  const anchorIndex = snapshot.findIndex(
+    (item) => item.role === 'user' && item.turnId === userTurn.turnId,
+  );
+  if (anchorIndex < 0) return undefined;
+  return snapshot
+    .slice(anchorIndex + 1)
+    .find((item) => item.role === 'assistant' && item.final);
+}
+
 export function isUserGoodbyeIntent(
   text: string,
   options: { orderCompleted?: boolean } = {},
@@ -128,16 +154,16 @@ export function isUserGoodbyeIntent(
   if (!normalized) return false;
   if (
     /\b(bye|goodbye|good\s+bye)\b/.test(normalized) ||
-    /\b(that'?s all|that is all|thanks,? that'?s all|thank you,? that'?s all)\b/.test(
-      normalized,
-    ) ||
-    /\b(end (the )?conversation|stop talking)\b/.test(normalized) ||
+    /\b(that'?s all|that is all|that'?s it|that is it)\b/.test(normalized) ||
+    /\b(end (the )?(conversation|session)|stop talking)\b/.test(normalized) ||
     /\b(no thanks|no thank you|nothing else|i'?m done|im done)\b/.test(normalized) ||
-    /^(stop|thanks\.?\s*)$/.test(normalized)
+    /\bno\b[\s,.!]*\b(thanks?|thank you)\b/.test(normalized) ||
+    /^(stop|thanks\.?\s*|thank you\.?\s*)$/.test(normalized) ||
+    isUserGoodbyeContinuation(text)
   ) {
     return true;
   }
-  if (options.orderCompleted && /^no\.?\s*$/.test(normalized)) {
+  if (options.orderCompleted && /^no[\s,.!]*\.?\s*$/.test(normalized)) {
     return true;
   }
   return false;

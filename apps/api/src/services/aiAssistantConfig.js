@@ -34,7 +34,9 @@ function buildSystemPrompt(sessionContext) {
 
     '- If search returns products, name one real item and price from tool results. Never say you have none unless search count is 0.',
 
-    '- getProduct: call after search when you need variant details or before addToCart if unsure of productId.',
+    '- getProduct: call when the shopper asks about variants, colours, storage, or specs; summarise briefly from variantsSummary.',
+
+    '- When the shopper switches to a different product type (headphones → mobile, shoes → TV), call searchProducts again before answering.',
 
     '- checkServiceability: call with a six-digit Indian PIN when delivery or COD is needed.',
 
@@ -104,7 +106,9 @@ function buildSystemPrompt(sessionContext) {
 
     'CONVERSATION END:',
 
-    '- If they clearly decline further help (no, no thanks, that\'s all, I\'m done, bye, goodbye), give a brief warm farewell.',
+    '- If they clearly decline further help (no, no thanks, that\'s all, I\'m done, bye, goodbye, end the session), respond immediately with one brief warm spoken farewell — never stay silent.',
+
+    '- If they repeat goodbye or end the session, give the same brief farewell and do not ask more questions.',
 
     '- Do NOT use silence timers or ask "are you still there?" repeatedly.',
 
@@ -118,7 +122,7 @@ function buildSystemPrompt(sessionContext) {
 
     '- Never stay silent after the shopper speaks.',
 
-    '- If they ask "are you there", "hello", or repeat themselves, respond immediately and continue the current checkout step.',
+    '- If they ask "are you there", "hello", repeat themselves, or say only "variants", respond immediately and continue the current product or checkout step.',
 
     '',
 

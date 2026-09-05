@@ -20,14 +20,12 @@ import type {
 } from '@/lib/voice/types';
 import {
   buildDisplayTranscript,
+  findFinalAssistantTurnAfterUserTurn,
   isUserGoodbyeIntent,
-  latestUserTurnId,
+  shouldCancelFarewellPending,
   type SdkTranscriptItem,
 } from '@/lib/voice/transcriptTurns';
 import type { Cart } from '@/lib/types';
-
-const THINKING_FILLER_DELAY_MS = 1000;
-const THINKING_FILLER_TEXT = 'Let me check that for you.';
 
 async function resolveContext(pathname: string) {
   const liveMatch = pathname.match(/^\/live\/([^/]+)$/);
@@ -82,86 +80,39 @@ export function useVoiceAssistant() {
   const applyCartRef = useRef<((cart: Cart) => void) | null>(null);
   const farewellPendingRef = useRef(false);
   const farewellAssistantHeardRef = useRef(false);
-  const farewellStopTimerRef = useRef<number | null>(null);
-  const stopAssistantRef = useRef<(() => Promise<void>) | null>(null);
-  const thinkingFillerTimerRef = useRef<number | null>(null);
-  const thinkingFillerShownRef = useRef(false);
+  const farewellAnchorTurnIdRef = useRef<number | null>(null);
+  const farewellReassertionsRef = useRef(0);
+  const stopAssistantRef = useRef<
+    ((reason?: 'user_stop' | 'farewell') => Promise<void>) | null
+  >(null);
   const thinkingActiveRef = useRef(false);
   const sdkSnapshotRef = useRef<SdkTranscriptItem[]>([]);
   const agentSpeakingRef = useRef(false);
   const greetingCompleteRef = useRef(false);
-  const fillerLineRef = useRef<VoiceTranscriptLine | null>(null);
-  const lastFillerUserTurnRef = useRef<number | null>(null);
   const orderCompletedRef = useRef(false);
 
   const rebuildTranscriptDisplay = useCallback(() => {
     setTranscripts(
       buildDisplayTranscript(sdkSnapshotRef.current, {
         agentSpeaking: agentSpeakingRef.current,
-        fillerLine: fillerLineRef.current,
+        agentThinking: thinkingActiveRef.current,
       }),
     );
-  }, []);
-
-  const clearThinkingFillerTimer = useCallback(() => {
-    if (thinkingFillerTimerRef.current !== null) {
-      window.clearTimeout(thinkingFillerTimerRef.current);
-      thinkingFillerTimerRef.current = null;
-    }
   }, []);
 
   const clearFarewellState = useCallback(() => {
     farewellPendingRef.current = false;
     farewellAssistantHeardRef.current = false;
-    if (farewellStopTimerRef.current !== null) {
-      window.clearTimeout(farewellStopTimerRef.current);
-      farewellStopTimerRef.current = null;
-    }
+    farewellAnchorTurnIdRef.current = null;
+    farewellReassertionsRef.current = 0;
   }, []);
 
-  const resetThinkingFillerTurn = useCallback(() => {
-    clearThinkingFillerTimer();
-    thinkingFillerShownRef.current = false;
-    fillerLineRef.current = null;
+  const resetAgentUiState = useCallback(() => {
+    thinkingActiveRef.current = false;
     rebuildTranscriptDisplay();
-  }, [clearThinkingFillerTimer, rebuildTranscriptDisplay]);
+  }, [rebuildTranscriptDisplay]);
 
-  const maybeScheduleThinkingFiller = useCallback(() => {
-    clearThinkingFillerTimer();
-    const userTurnId = latestUserTurnId(sdkSnapshotRef.current);
-    if (
-      thinkingFillerShownRef.current ||
-      !thinkingActiveRef.current ||
-      (userTurnId !== null && lastFillerUserTurnRef.current === userTurnId)
-    ) {
-      return;
-    }
-    thinkingFillerTimerRef.current = window.setTimeout(() => {
-      thinkingFillerTimerRef.current = null;
-      if (!activeRef.current || !thinkingActiveRef.current || thinkingFillerShownRef.current) {
-        return;
-      }
-      const activeUserTurnId = latestUserTurnId(sdkSnapshotRef.current);
-      if (
-        activeUserTurnId !== null &&
-        lastFillerUserTurnRef.current === activeUserTurnId
-      ) {
-        return;
-      }
-      thinkingFillerShownRef.current = true;
-      lastFillerUserTurnRef.current = activeUserTurnId;
-      fillerLineRef.current = {
-        role: 'assistant',
-        text: THINKING_FILLER_TEXT,
-        ts: new Date().toISOString(),
-        final: true,
-        filler: true,
-      };
-      rebuildTranscriptDisplay();
-    }, THINKING_FILLER_DELAY_MS);
-  }, [clearThinkingFillerTimer, rebuildTranscriptDisplay]);
-
-  const cleanupVoiceStack = useCallback(async () => {
+  const cleanupVoiceStack = useCallback(async (options?: { preserveTranscript?: boolean }) => {
     const voiceAiRuntime = voiceAiRuntimeRef.current;
     voiceAiRuntimeRef.current = null;
     if (voiceAiRuntime) {
@@ -195,14 +146,14 @@ export function useVoiceAssistant() {
     micTrackRef.current = null;
     setMicMuted(false);
     thinkingActiveRef.current = false;
-    sdkSnapshotRef.current = [];
     agentSpeakingRef.current = false;
-    greetingCompleteRef.current = false;
-    fillerLineRef.current = null;
-    lastFillerUserTurnRef.current = null;
-    orderCompletedRef.current = false;
-    resetThinkingFillerTurn();
-  }, [resetThinkingFillerTurn]);
+    if (!options?.preserveTranscript) {
+      sdkSnapshotRef.current = [];
+      greetingCompleteRef.current = false;
+      orderCompletedRef.current = false;
+      resetAgentUiState();
+    }
+  }, [resetAgentUiState]);
 
   const handleSessionEnded = useCallback(
     async (message: string) => {
@@ -221,10 +172,10 @@ export function useVoiceAssistant() {
     [cleanupVoiceStack, clearFarewellState],
   );
 
-  const stopAssistant = useCallback(async () => {
+  const stopAssistant = useCallback(async (reason: 'user_stop' | 'farewell' = 'user_stop') => {
     activeRef.current = false;
     clearFarewellState();
-    await cleanupVoiceStack();
+    await cleanupVoiceStack({ preserveTranscript: reason === 'farewell' });
     setLiveAudioDucked(false);
     setReplayAudioDucked(false);
 
@@ -235,25 +186,31 @@ export function useVoiceAssistant() {
 
     if (sessionId) {
       try {
-        await api.stopVoiceAiSession({ sessionId, shopperUserId });
+        await api.stopVoiceAiSession({ sessionId, shopperUserId, reason });
       } catch {
         // ignore stop errors during cleanup
       }
     }
 
-    setState('idle');
-    setOpen(false);
+    if (reason === 'farewell') {
+      setState('ended');
+      setOpen(true);
+      setNotice('');
+      setError('');
+    } else {
+      setState('idle');
+      setOpen(false);
+    }
   }, [cleanupVoiceStack, clearFarewellState]);
 
   stopAssistantRef.current = stopAssistant;
 
-  const scheduleGracefulStopAfterFarewell = useCallback(() => {
-    if (farewellStopTimerRef.current !== null) return;
-    farewellStopTimerRef.current = window.setTimeout(() => {
-      farewellStopTimerRef.current = null;
-      if (!activeRef.current || !farewellPendingRef.current) return;
-      stopAssistantRef.current?.().catch(() => undefined);
-    }, 450);
+  const completeFarewellStop = useCallback((options?: { requireAssistantHeard?: boolean }) => {
+    if (!activeRef.current || !farewellPendingRef.current) return;
+    if (options?.requireAssistantHeard !== false && !farewellAssistantHeardRef.current) {
+      return;
+    }
+    stopAssistantRef.current?.('farewell').catch(() => undefined);
   }, []);
 
   const toggleVoiceMicMuted = useCallback(async () => {
@@ -357,25 +314,73 @@ export function useVoiceAssistant() {
         shopperRtcUid: startPayload.shopperRtcUid,
         onTranscriptSnapshot: (snapshot) => {
           if (!activeRef.current) return;
-          const previousUserTurn = latestUserTurnId(sdkSnapshotRef.current);
           sdkSnapshotRef.current = snapshot;
-          const nextUserTurn = latestUserTurnId(snapshot);
-          if (nextUserTurn !== null && nextUserTurn !== previousUserTurn) {
-            thinkingFillerShownRef.current = false;
-            fillerLineRef.current = null;
-            clearThinkingFillerTimer();
+          for (const item of snapshot) {
+            if (item.role === 'user' && item.final) {
+              console.info(
+                `[VoiceAI Client] ${item.ts} event=user_transcript_final turn=${item.turnId} text=${JSON.stringify(item.text)}`,
+              );
+            }
           }
           rebuildTranscriptDisplay();
-          for (const item of snapshot) {
-            if (
-              item.role === 'user' &&
-              isUserGoodbyeIntent(item.text, { orderCompleted: orderCompletedRef.current })
-            ) {
-              farewellPendingRef.current = true;
-              farewellAssistantHeardRef.current = false;
+          if (!orderCompletedRef.current) {
+            const latestAssistantOrderHint = [...snapshot]
+              .reverse()
+              .find(
+                (item) =>
+                  item.role === 'assistant' &&
+                  item.final &&
+                  /\b(order (id|has been|confirmed)|ord-[a-f0-9]{8})\b/i.test(item.text),
+              );
+            if (latestAssistantOrderHint) {
+              orderCompletedRef.current = true;
             }
-            if (item.role === 'assistant' && farewellPendingRef.current && item.final) {
-              farewellAssistantHeardRef.current = true;
+          }
+          const latestUserTurn = [...snapshot]
+            .reverse()
+            .find((item) => item.role === 'user' && item.final);
+          if (latestUserTurn) {
+            if (isUserGoodbyeIntent(latestUserTurn.text, { orderCompleted: orderCompletedRef.current })) {
+              if (!farewellPendingRef.current) {
+                farewellPendingRef.current = true;
+                farewellAssistantHeardRef.current = false;
+                farewellAnchorTurnIdRef.current = latestUserTurn.turnId;
+                farewellReassertionsRef.current = 0;
+              } else if (
+                !farewellAssistantHeardRef.current &&
+                !thinkingActiveRef.current &&
+                !agentSpeakingRef.current
+              ) {
+                farewellReassertionsRef.current += 1;
+                if (farewellReassertionsRef.current >= 1) {
+                  completeFarewellStop({ requireAssistantHeard: false });
+                }
+              }
+            } else if (
+              farewellPendingRef.current &&
+              !farewellAssistantHeardRef.current &&
+              shouldCancelFarewellPending(latestUserTurn.text)
+            ) {
+              farewellPendingRef.current = false;
+              farewellAnchorTurnIdRef.current = null;
+            }
+          }
+          if (farewellPendingRef.current && farewellAnchorTurnIdRef.current !== null) {
+            const anchorUserTurn = snapshot.find(
+              (item) =>
+                item.role === 'user' && item.turnId === farewellAnchorTurnIdRef.current,
+            );
+            if (anchorUserTurn) {
+              const laterAssistantTurn = findFinalAssistantTurnAfterUserTurn(
+                snapshot,
+                anchorUserTurn,
+              );
+              if (laterAssistantTurn) {
+                farewellAssistantHeardRef.current = true;
+                if (!agentSpeakingRef.current && !thinkingActiveRef.current) {
+                  completeFarewellStop();
+                }
+              }
             }
           }
         },
@@ -383,8 +388,9 @@ export function useVoiceAssistant() {
           if (!activeRef.current) return;
           agentSpeakingRef.current = active;
           if (active) {
-            clearThinkingFillerTimer();
-            fillerLineRef.current = null;
+            if (farewellPendingRef.current && !farewellAssistantHeardRef.current) {
+              farewellAssistantHeardRef.current = true;
+            }
             setState('speaking');
           } else {
             if (!greetingCompleteRef.current) {
@@ -392,7 +398,7 @@ export function useVoiceAssistant() {
             }
             setState('listening');
             if (farewellPendingRef.current && farewellAssistantHeardRef.current) {
-              scheduleGracefulStopAfterFarewell();
+              completeFarewellStop();
             }
           }
           rebuildTranscriptDisplay();
@@ -402,23 +408,25 @@ export function useVoiceAssistant() {
           thinkingActiveRef.current = active;
           if (active) {
             setState('thinking');
-            maybeScheduleThinkingFiller();
-          } else {
-            clearThinkingFillerTimer();
-            if (!agentSpeakingRef.current) {
-              setState(greetingCompleteRef.current ? 'listening' : 'connecting');
-            }
+          } else if (!agentSpeakingRef.current) {
+            setState(greetingCompleteRef.current ? 'listening' : 'connecting');
           }
+          rebuildTranscriptDisplay();
         },
         onAgentError: () => {
           if (!activeRef.current) return;
+          thinkingActiveRef.current = false;
+          if (!agentSpeakingRef.current) {
+            setState(greetingCompleteRef.current ? 'listening' : 'connecting');
+          }
+          rebuildTranscriptDisplay();
           setNotice('Assistant hit a brief error — you can keep speaking or tap Stop and try again.');
         },
       });
 
       if (activeRef.current && greetingCompleteRef.current) setState('listening');
     },
-    [handleSessionEnded, maybeScheduleThinkingFiller, clearThinkingFillerTimer, rebuildTranscriptDisplay, resetThinkingFillerTurn, scheduleGracefulStopAfterFarewell],
+    [completeFarewellStop, handleSessionEnded, rebuildTranscriptDisplay, resetAgentUiState],
   );
 
   const startAssistant = useCallback(
@@ -430,7 +438,7 @@ export function useVoiceAssistant() {
         await cleanupVoiceStack();
         if (previousSessionId) {
           try {
-            await api.stopVoiceAiSession({ sessionId: previousSessionId, shopperUserId });
+            await api.stopVoiceAiSession({ sessionId: previousSessionId, shopperUserId, reason: 'user_stop' });
           } catch {
             // ignore stale stop errors
           }
@@ -441,12 +449,10 @@ export function useVoiceAssistant() {
       }
 
       clearFarewellState();
-      resetThinkingFillerTurn();
+      resetAgentUiState();
       sdkSnapshotRef.current = [];
       agentSpeakingRef.current = false;
       greetingCompleteRef.current = false;
-      fillerLineRef.current = null;
-      lastFillerUserTurnRef.current = null;
       orderCompletedRef.current = false;
       setTranscripts([]);
       setError('');
@@ -507,7 +513,7 @@ export function useVoiceAssistant() {
         setError(err instanceof Error ? err.message : 'Could not start Voice AI');
       }
     },
-    [cleanupVoiceStack, clearFarewellState, connectAgoraRtc, pathname, resetThinkingFillerTurn, subscribeAgentAudio],
+    [cleanupVoiceStack, clearFarewellState, connectAgoraRtc, pathname, resetAgentUiState, subscribeAgentAudio],
   );
 
   useEffect(() => {
@@ -519,6 +525,9 @@ export function useVoiceAssistant() {
         .getVoiceAiSession(pollSessionId)
         .then(async (session) => {
           if (session.state === 'ended') {
+            console.warn(
+              `[VoiceAI Client] ${new Date().toISOString()} event=session_ended stopReason=${session.stopReason || 'unknown'}`,
+            );
             await handleSessionEnded(
               'Voice assistant session ended. Tap Try again to start a new session.',
             );
@@ -560,6 +569,11 @@ export function useVoiceAssistant() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const dismissPanel = useCallback(() => {
+    setOpen(false);
+    setState('idle');
+  }, []);
+
   return {
     open,
     state,
@@ -569,6 +583,7 @@ export function useVoiceAssistant() {
     audioAnchorRef,
     startAssistant,
     stopAssistant,
+    dismissPanel,
     toggleVoiceMicMuted,
     micMuted,
     setOpen,

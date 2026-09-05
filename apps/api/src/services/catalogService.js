@@ -104,6 +104,36 @@ function getProductById(id) {
   return products.find((p) => p.id === id) || null;
 }
 
+function resolveProductId(hint) {
+  const raw = String(hint || '').trim();
+  if (!raw) return '';
+
+  const byId = getProductById(raw);
+  if (byId) return byId.id;
+
+  const lower = raw.toLowerCase();
+  const exactName = products.find((product) => product.name.toLowerCase() === lower);
+  if (exactName) return exactName.id;
+
+  const partialName = products.find(
+    (product) =>
+      product.name.toLowerCase().includes(lower) || lower.includes(product.name.toLowerCase()),
+  );
+  if (partialName) return partialName.id;
+
+  const searchResults = listProducts({ search: raw });
+  if (searchResults.length === 1) return searchResults[0].id;
+  if (searchResults.length > 1) {
+    const bestNameMatch = searchResults.find(
+      (product) =>
+        product.name.toLowerCase().includes(lower) || lower.includes(product.name.toLowerCase()),
+    );
+    return (bestNameMatch || searchResults[0]).id;
+  }
+
+  return raw;
+}
+
 function getVariant(product, variantId) {
   if (!product || !variantId) return null;
   return product.variants.find((v) => v.id === variantId) || null;
@@ -152,6 +182,8 @@ function resolveVariant(product, variantHint) {
 }
 
 function summarizeProduct(product) {
+  const defaultVariant = pickDefaultVariant(product);
+  const priceFrom = Math.min(...product.variants.map((v) => v.price));
   return {
     id: product.id,
     name: product.name,
@@ -159,12 +191,14 @@ function summarizeProduct(product) {
     brand: product.brand,
     description: product.description,
     keywords: product.keywords || [],
-    basePrice: product.basePrice,
     image: product.images[0],
     rating: product.rating,
     inStock: product.inStock,
     variantCount: product.variants.length,
-    priceFrom: Math.min(...product.variants.map((v) => v.price)),
+    priceFrom,
+    defaultVariantId: defaultVariant ? defaultVariant.id : null,
+    defaultVariantName: defaultVariant ? defaultVariant.name : null,
+    defaultVariantPrice: defaultVariant ? defaultVariant.price : priceFrom,
   };
 }
 
@@ -190,6 +224,7 @@ module.exports = {
   CATEGORIES,
   listProducts,
   getProductById,
+  resolveProductId,
   getVariant,
   pickDefaultVariant,
   resolveVariant,

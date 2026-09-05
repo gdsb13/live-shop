@@ -151,7 +151,6 @@ const AI_TOOL_DEFINITIONS = [
             description: 'Optional six-digit Indian PIN for delivery validation.',
           },
         },
-        required: ['paymentMethod'],
       },
     },
   },

@@ -34,13 +34,18 @@ code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/ai/tools/notAll
 [ "$code" = "400" ] || fail "reject disallowed tool (got $code)"
 pass "reject disallowed AI tool"
 
-code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/ai/tools/checkServiceability" -H 'Content-Type: application/json' -d '{"pin":"12"}')"
-[ "$code" = "400" ] || fail "reject invalid PIN (got $code)"
-pass "validate checkServiceability PIN"
+svc_bad="$(curl -sf -X POST "$API/api/ai/tools/checkServiceability" -H 'Content-Type: application/json' -d '{"pin":"12"}')"
+echo "$svc_bad" | grep -q '"code":"INVALID_PIN"' || fail "checkServiceability recoverable invalid PIN"
+pass "checkServiceability recoverable invalid PIN"
 
 search="$(curl -sf -X POST "$API/api/ai/tools/searchProducts" -H 'Content-Type: application/json' -d '{"query":"noise cancelling headphones"}')"
 echo "$search" | grep -q 'elec-headphones-sony' || fail "search finds Sony headphones"
 pass "searchProducts tool"
+
+tv_search="$(curl -sf -X POST "$API/api/ai/tools/searchProducts" -H 'Content-Type: application/json' -d '{"query":"smart tv"}')"
+echo "$tv_search" | grep -q '"defaultVariantPrice":32999' || fail "search exposes default variant price for Samsung TV"
+echo "$tv_search" | grep -q '"basePrice"' && fail "search must not expose misleading basePrice"
+pass "searchProducts exposes authoritative default variant price"
 
 product="$(curl -sf -X POST "$API/api/ai/tools/getProduct" -H 'Content-Type: application/json' -d '{"productId":"elec-headphones-sony"}')"
 echo "$product" | grep -q '"brand":"Sony"' || fail "getProduct Sony"
@@ -53,6 +58,14 @@ pass "getCurrentPrice tool"
 compare="$(curl -sf -X POST "$API/api/ai/tools/compareProducts" -H 'Content-Type: application/json' -d '{"productIds":["elec-headphones-sony","elec-tv-samsung-55"]}')"
 echo "$compare" | grep -q 'elec-headphones-sony' || fail "compare includes Sony"
 pass "compareProducts tool"
+
+compare_one="$(curl -sf -X POST "$API/api/ai/tools/compareProducts" -H 'Content-Type: application/json' -d '{"productIds":["elec-headphones-sony"]}')"
+echo "$compare_one" | grep -q '"code":"INSUFFICIENT_PRODUCTS"' || fail "compareProducts returns recoverable insufficient-products result"
+pass "compareProducts recoverable insufficient-products result"
+
+search_empty="$(curl -sf -X POST "$API/api/ai/tools/searchProducts" -H 'Content-Type: application/json' -d '{}')"
+echo "$search_empty" | grep -q '"code":"MISSING_SEARCH_QUERY"' || fail "searchProducts returns recoverable missing-query result"
+pass "searchProducts recoverable missing-query result"
 
 svc="$(curl -sf -X POST "$API/api/ai/tools/checkServiceability" -H 'Content-Type: application/json' -d '{"pin":"201014"}')"
 echo "$svc" | grep -q 'serviceable\|available\|deliver' || fail "serviceability message"
@@ -69,6 +82,18 @@ pass "addToCart tool"
 remove="$(curl -sf -X POST "${SHOPPER_H[@]}" "$API/api/ai/tools/removeFromCart" -H 'Content-Type: application/json' -d '{"productId":"elec-tv-samsung-55","context":{"shopperUserId":"shopper-ai-test-tab"}}')"
 echo "$remove" | grep -q '"success":true' || fail "removeFromCart success"
 pass "removeFromCart tool"
+
+curl -sf -X POST "${SHOPPER_H[@]}" "$API/api/ai/tools/addToCart" -H 'Content-Type: application/json' \
+  -d '{"productId":"elec-tv-samsung-55","variantId":"v-43","quantity":1,"context":{"shopperUserId":"shopper-ai-test-tab"}}' >/dev/null
+curl -sf -X POST "${SHOPPER_H[@]}" "$API/api/ai/tools/addToCart" -H 'Content-Type: application/json' \
+  -d '{"productId":"elec-headphones-sony","variantId":"v-black","quantity":1,"context":{"shopperUserId":"shopper-ai-test-tab"}}' >/dev/null
+checkout_missing="$(curl -sf -X POST "${SHOPPER_H[@]}" "$API/api/ai/tools/checkout" -H 'Content-Type: application/json' \
+  -d '{"context":{"shopperUserId":"shopper-ai-test-tab"}}')"
+echo "$checkout_missing" | grep -q '"code":"MISSING_PAYMENT_METHOD"' || fail "checkout without payment returns recoverable result"
+cart_after="$(curl -sf -X POST "${SHOPPER_H[@]}" "$API/api/ai/tools/getCart" -H 'Content-Type: application/json' \
+  -d '{"context":{"shopperUserId":"shopper-ai-test-tab"}}')"
+echo "$cart_after" | grep -q '"itemCount":2' || fail "getCart still works after recoverable checkout error"
+pass "checkout recoverable missing payment and next tool call succeeds"
 
 code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/ai/session/start" -H 'Content-Type: application/json' -d '{"surface":"storefront","shopperUserId":"shopper-ai-test-tab","shopperRtcUid":234567890}')"
 if [ "$code" = "200" ]; then

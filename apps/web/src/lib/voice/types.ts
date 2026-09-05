@@ -6,6 +6,7 @@ export type VoiceAssistantState =
   | 'listening'
   | 'thinking'
   | 'speaking'
+  | 'ended'
   | 'error';
 
 export type VoiceTranscriptLine = {

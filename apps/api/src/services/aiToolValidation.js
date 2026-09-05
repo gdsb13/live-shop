@@ -1,10 +1,6 @@
 'use strict';
 
-function httpError(message, status) {
-  const err = new Error(message);
-  err.status = status;
-  return err;
-}
+const catalogService = require('./catalogService');
 
 function normalizePaymentMethod(value) {
   const raw = String(value || '').trim().toLowerCase();
@@ -33,72 +29,67 @@ function normalizePaymentMethod(value) {
   return raw;
 }
 
-// Validate LLM-generated arguments before executing business logic.
+function coercePaymentMethodValue(value) {
+  if (value && typeof value === 'object') {
+    return value.id || value.value || value.name || '';
+  }
+  return value;
+}
+
+function coerceProductIdValue(value) {
+  if (value && typeof value === 'object') {
+    return value.id || value.productId || value.value || value.name || '';
+  }
+  return value;
+}
+
+function normalizeProductId(value) {
+  const raw = coerceProductIdValue(value);
+  if (raw === undefined || raw === null || raw === '') return '';
+  return catalogService.resolveProductId(String(raw));
+}
+
+// Normalize LLM-generated arguments. Recoverable validation is handled in tool functions.
 function validateToolInput(toolName, args) {
   const input = args && typeof args === 'object' ? args : {};
 
   switch (toolName) {
-    case 'searchProducts':
-      if (!input.query && !input.category) {
-        throw httpError('searchProducts requires query or category', 400);
-      }
-      break;
     case 'getProduct':
-      if (!input.productId || typeof input.productId !== 'string') {
-        throw httpError('getProduct requires productId', 400);
+    case 'getCurrentPrice':
+    case 'addToCart':
+    case 'removeFromCart':
+      if (input.productId !== undefined && input.productId !== null && input.productId !== '') {
+        input.productId = normalizeProductId(input.productId);
+      }
+      if (input.variantId !== undefined && input.variantId !== null && input.variantId !== '') {
+        input.variantId = String(coerceProductIdValue(input.variantId));
       }
       break;
     case 'compareProducts':
-      if (!Array.isArray(input.productIds) || input.productIds.length < 2) {
-        throw httpError('compareProducts requires at least two productIds', 400);
+      if (input.productIds !== undefined && !Array.isArray(input.productIds)) {
+        input.productIds = input.productIds == null ? [] : [input.productIds];
       }
-      if (input.productIds.some((id) => typeof id !== 'string' || !id.trim())) {
-        throw httpError('compareProducts productIds must be non-empty strings', 400);
+      if (Array.isArray(input.productIds)) {
+        input.productIds = input.productIds
+          .map((value) => normalizeProductId(value))
+          .filter(Boolean);
       }
-      break;
-    case 'checkServiceability':
-      if (!/^[1-9][0-9]{5}$/.test(String(input.pin || ''))) {
-        throw httpError('checkServiceability requires a valid six-digit Indian PIN', 400);
-      }
-      break;
-    case 'getPaymentOptions':
-      break;
-    case 'getCart':
-      break;
-    case 'getCurrentPrice':
-      if (!input.productId || typeof input.productId !== 'string') {
-        throw httpError('getCurrentPrice requires productId', 400);
-      }
-      break;
-    case 'addToCart':
-      if (!input.productId || typeof input.productId !== 'string') {
-        throw httpError(
-          'addToCart requires a productId — search or getProduct for the item first',
-          400,
-        );
-      }
-      if (input.quantity !== undefined) {
-        const quantity = Number(input.quantity);
-        if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10) {
-          throw httpError('addToCart quantity must be an integer between 1 and 10', 400);
-        }
-      }
-      break;
-    case 'removeFromCart':
       break;
     case 'checkout': {
-      const paymentMethod = normalizePaymentMethod(input.paymentMethod);
-      if (!paymentMethod || !['upi', 'card', 'cod'].includes(paymentMethod)) {
-        throw httpError('checkout paymentMethod must be upi, card, or cod', 400);
+      if (input.deliveryPin !== undefined && input.deliveryPin !== null && input.deliveryPin !== '') {
+        input.deliveryPin = String(input.deliveryPin);
       }
-      input.paymentMethod = paymentMethod;
-      if (input.deliveryPin !== undefined && !/^[1-9][0-9]{5}$/.test(String(input.deliveryPin))) {
-        throw httpError('checkout deliveryPin must be a valid six-digit Indian PIN when provided', 400);
+      input.paymentMethod = coercePaymentMethodValue(input.paymentMethod);
+      if (input.paymentMethod !== undefined && input.paymentMethod !== null && input.paymentMethod !== '') {
+        const paymentMethod = normalizePaymentMethod(input.paymentMethod);
+        if (paymentMethod && ['upi', 'card', 'cod'].includes(paymentMethod)) {
+          input.paymentMethod = paymentMethod;
+        }
       }
       break;
     }
     default:
-      throw httpError(`Unknown tool "${toolName}"`, 400);
+      break;
   }
 
   return input;
@@ -107,4 +98,5 @@ function validateToolInput(toolName, args) {
 module.exports = {
   validateToolInput,
   normalizePaymentMethod,
+  normalizeProductId,
 };
