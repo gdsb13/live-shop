@@ -126,9 +126,13 @@ function runCommerceTool(toolName, args, headers) {
     sessionContext.lastVariantId = result.variantId;
   }
 
-  if ((toolName === 'addToCart' || toolName === 'removeFromCart') && result && result.success) {
+  if ((toolName === 'addToCart' || toolName === 'removeFromCart' || toolName === 'checkout') && result && result.success) {
     if (sessionContext.id) {
       sessionContext.cartUpdated = true;
+      if (toolName === 'checkout' && result.orderId) {
+        sessionContext.orderCompleted = true;
+        sessionContext.lastOrderId = result.orderId;
+      }
       aiSessionStore.updateSession(sessionContext.id, sessionContext);
     }
     console.log('[VoiceAI] Cart mutation: success');

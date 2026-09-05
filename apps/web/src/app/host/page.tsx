@@ -65,7 +65,12 @@ export default function HostPage() {
       </p>
 
       <div className="row" style={{ margin: '20px 0' }}>
-        <Link href="/live" className="button-secondary">
+        <Link
+          href="/live"
+          className="button-secondary"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           View shopper Live Shopping page
         </Link>
         <button className="button-secondary" type="button" onClick={() => loadSessions()}>
@@ -99,7 +104,12 @@ export default function HostPage() {
                   <p className="live-session-meta">Ended: {formatSessionDate(session.endedAt)}</p>
                 )}
               </div>
-              <Link href={`/live/${session.id}`} className="button-secondary">
+              <Link
+                href={`/live/${session.id}`}
+                className="button-secondary"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Open viewer page
               </Link>
             </div>

@@ -1,17 +1,33 @@
 'use client';
 
+import { Mic, MicOff } from 'lucide-react';
 import { useCart } from '@/components/CartProvider';
 import { useVoiceAssistant } from '@/hooks/useVoiceAssistant';
 import type { VoiceAssistantState } from '@/lib/voice/types';
 
-const STATE_LABELS: Record<VoiceAssistantState, string> = {
+type VoiceDisplayState = VoiceAssistantState | 'muted';
+
+const STATE_LABELS: Record<VoiceDisplayState, string> = {
   idle: 'Ready',
   connecting: 'Connecting…',
   listening: 'Listening',
   thinking: 'Thinking…',
   speaking: 'Speaking',
+  muted: 'Muted',
   error: 'Error',
 };
+
+function resolveDisplayState(
+  state: VoiceAssistantState,
+  micMuted: boolean,
+  sessionActive: boolean,
+): VoiceDisplayState {
+  if (state === 'error' || state === 'connecting' || state === 'speaking' || state === 'thinking') {
+    return state;
+  }
+  if (micMuted && sessionActive) return 'muted';
+  return state;
+}
 
 export function VoiceAssistantPanel() {
   const { refreshCart, applyCart } = useCart();
@@ -30,6 +46,7 @@ export function VoiceAssistantPanel() {
   } = useVoiceAssistant();
 
   const sessionActive = open && state !== 'idle' && state !== 'error';
+  const displayState = resolveDisplayState(state, micMuted, sessionActive);
 
   if (!open && state === 'idle') {
     return (
@@ -49,7 +66,7 @@ export function VoiceAssistantPanel() {
       <header className="voice-ai-panel__header">
         <div>
           <strong>Voice Assistant</strong>
-          <span className="voice-ai-panel__state">{STATE_LABELS[state] || state}</span>
+          <span className="voice-ai-panel__state">{STATE_LABELS[displayState]}</span>
         </div>
         <button type="button" className="voice-ai-panel__close" onClick={() => stopAssistant()}>
           Stop
@@ -58,9 +75,9 @@ export function VoiceAssistantPanel() {
 
       <div className="voice-ai-panel__status">
         <div
-          className={`voice-ai-orb voice-ai-orb--${state}`}
+          className={`voice-ai-orb voice-ai-orb--${displayState}`}
           role="status"
-          aria-label={STATE_LABELS[state] || state}
+          aria-label={STATE_LABELS[displayState]}
         />
       </div>
 
@@ -72,7 +89,10 @@ export function VoiceAssistantPanel() {
           <p className="voice-ai-panel__placeholder">Your conversation will appear here.</p>
         ) : (
           transcripts.map((line, index) => (
-            <p key={`${line.ts}-${index}`} className={`voice-ai-line voice-ai-line--${line.role}`}>
+            <p
+              key={`${line.role}-${line.ts}-${index}`}
+              className={`voice-ai-line voice-ai-line--${line.role}${line.filler ? ' voice-ai-line--filler' : ''}`}
+            >
               <span>{line.role === 'user' ? 'You' : 'Assistant'}</span>
               {line.text}
             </p>
@@ -87,7 +107,10 @@ export function VoiceAssistantPanel() {
             className={`voice-ai-panel__mic ${micMuted ? 'is-muted' : ''}`}
             onClick={() => toggleVoiceMicMuted()}
             aria-pressed={!micMuted}
+            aria-label={micMuted ? 'Unmute microphone' : 'Mute microphone'}
+            title={micMuted ? 'Unmute microphone' : 'Mute microphone'}
           >
+            {micMuted ? <MicOff size={16} aria-hidden="true" /> : <Mic size={16} aria-hidden="true" />}
             {micMuted ? 'Unmute mic' : 'Mute mic'}
           </button>
         </div>

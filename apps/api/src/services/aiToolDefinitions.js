@@ -133,6 +133,28 @@ const AI_TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'checkout',
+      description:
+        'Place the order for the current cart. Call ONLY after the shopper explicitly confirms placing the order (yes/confirm/place it) in direct response to your order summary question. Returns orderId on success.',
+      parameters: {
+        type: 'object',
+        properties: {
+          paymentMethod: {
+            type: 'string',
+            description: 'Payment method id from getPaymentOptions (upi, card, or cod).',
+          },
+          deliveryPin: {
+            type: 'string',
+            description: 'Optional six-digit Indian PIN for delivery validation.',
+          },
+        },
+        required: ['paymentMethod'],
+      },
+    },
+  },
 ];
 
 const ALLOWED_TOOL_NAMES = new Set(

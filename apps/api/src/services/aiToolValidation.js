@@ -59,6 +59,14 @@ function validateToolInput(toolName, args) {
       break;
     case 'removeFromCart':
       break;
+    case 'checkout':
+      if (!input.paymentMethod || typeof input.paymentMethod !== 'string') {
+        throw httpError('checkout requires paymentMethod (upi, card, or cod)', 400);
+      }
+      if (input.deliveryPin !== undefined && !/^[1-9][0-9]{5}$/.test(String(input.deliveryPin))) {
+        throw httpError('checkout deliveryPin must be a valid six-digit Indian PIN when provided', 400);
+      }
+      break;
     default:
       throw httpError(`Unknown tool "${toolName}"`, 400);
   }

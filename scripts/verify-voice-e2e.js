@@ -150,6 +150,7 @@ async function runPass(passNumber) {
     'getCurrentPrice',
     'addToCart',
     'removeFromCart',
+    'checkout',
   ];
   const missing = required.filter((name) => !tools.includes(name));
   if (missing.length) {

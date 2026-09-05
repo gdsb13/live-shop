@@ -18,7 +18,16 @@ import type {
   VoiceAssistantSurface,
   VoiceTranscriptLine,
 } from '@/lib/voice/types';
+import {
+  buildDisplayTranscript,
+  isUserGoodbyeIntent,
+  latestUserTurnId,
+  type SdkTranscriptItem,
+} from '@/lib/voice/transcriptTurns';
 import type { Cart } from '@/lib/types';
+
+const THINKING_FILLER_DELAY_MS = 1000;
+const THINKING_FILLER_TEXT = 'Let me check that for you.';
 
 async function resolveContext(pathname: string) {
   const liveMatch = pathname.match(/^\/live\/([^/]+)$/);
@@ -51,80 +60,6 @@ function isAgentRemoteUser(
   return !agentUid;
 }
 
-function compactTranscriptText(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, '');
-}
-
-function isIncrementalTranscript(prev: string, next: string): boolean {
-  const previous = compactTranscriptText(prev);
-  const incoming = compactTranscriptText(next);
-  if (!previous || !incoming) return false;
-  if (previous === incoming) return true;
-  return incoming.startsWith(previous) || previous.startsWith(incoming);
-}
-
-function coalesceTranscriptLines(lines: VoiceTranscriptLine[]): VoiceTranscriptLine[] {
-  const next: VoiceTranscriptLine[] = [];
-  for (const line of lines) {
-    if (!line.text?.trim()) continue;
-    const last = next[next.length - 1];
-    if (last && last.role === line.role && isIncrementalTranscript(last.text, line.text)) {
-      const keepLonger = line.text.length >= last.text.length ? line : last;
-      next[next.length - 1] = {
-        role: line.role,
-        text: keepLonger.text,
-        ts: line.ts || last.ts,
-      };
-      continue;
-    }
-    const key = `${line.role}:${compactTranscriptText(line.text)}`;
-    if (next.some((entry) => `${entry.role}:${compactTranscriptText(entry.text)}` === key)) {
-      continue;
-    }
-    next.push(line);
-  }
-  return next;
-}
-
-function isUserGoodbyeIntent(text: string): boolean {
-  const normalized = text.trim().toLowerCase();
-  if (!normalized) return false;
-  return (
-    /\b(bye|goodbye|good\s+bye)\b/.test(normalized) ||
-    /\b(that'?s all|that is all|thanks,? that'?s all|thank you,? that'?s all)\b/.test(
-      normalized,
-    ) ||
-    /\b(end (the )?conversation|stop talking)\b/.test(normalized) ||
-    /^(stop|thanks\.?\s*)$/.test(normalized)
-  );
-}
-
-function mergeTranscripts(
-  current: VoiceTranscriptLine[],
-  incoming: VoiceTranscriptLine[],
-): VoiceTranscriptLine[] {
-  if (!incoming.length) return current;
-  const next = current.slice();
-  for (const line of coalesceTranscriptLines(incoming)) {
-    const last = next[next.length - 1];
-    if (last && last.role === line.role && isIncrementalTranscript(last.text, line.text)) {
-      const keepLonger = line.text.length >= last.text.length ? line : last;
-      next[next.length - 1] = {
-        role: line.role,
-        text: keepLonger.text,
-        ts: line.ts || last.ts,
-      };
-      continue;
-    }
-    const key = `${line.role}:${compactTranscriptText(line.text)}`;
-    if (next.some((entry) => `${entry.role}:${compactTranscriptText(entry.text)}` === key)) {
-      continue;
-    }
-    next.push(line);
-  }
-  return next.slice(-40);
-}
-
 export function useVoiceAssistant() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -149,6 +84,31 @@ export function useVoiceAssistant() {
   const farewellAssistantHeardRef = useRef(false);
   const farewellStopTimerRef = useRef<number | null>(null);
   const stopAssistantRef = useRef<(() => Promise<void>) | null>(null);
+  const thinkingFillerTimerRef = useRef<number | null>(null);
+  const thinkingFillerShownRef = useRef(false);
+  const thinkingActiveRef = useRef(false);
+  const sdkSnapshotRef = useRef<SdkTranscriptItem[]>([]);
+  const agentSpeakingRef = useRef(false);
+  const greetingCompleteRef = useRef(false);
+  const fillerLineRef = useRef<VoiceTranscriptLine | null>(null);
+  const lastFillerUserTurnRef = useRef<number | null>(null);
+  const orderCompletedRef = useRef(false);
+
+  const rebuildTranscriptDisplay = useCallback(() => {
+    setTranscripts(
+      buildDisplayTranscript(sdkSnapshotRef.current, {
+        agentSpeaking: agentSpeakingRef.current,
+        fillerLine: fillerLineRef.current,
+      }),
+    );
+  }, []);
+
+  const clearThinkingFillerTimer = useCallback(() => {
+    if (thinkingFillerTimerRef.current !== null) {
+      window.clearTimeout(thinkingFillerTimerRef.current);
+      thinkingFillerTimerRef.current = null;
+    }
+  }, []);
 
   const clearFarewellState = useCallback(() => {
     farewellPendingRef.current = false;
@@ -158,6 +118,48 @@ export function useVoiceAssistant() {
       farewellStopTimerRef.current = null;
     }
   }, []);
+
+  const resetThinkingFillerTurn = useCallback(() => {
+    clearThinkingFillerTimer();
+    thinkingFillerShownRef.current = false;
+    fillerLineRef.current = null;
+    rebuildTranscriptDisplay();
+  }, [clearThinkingFillerTimer, rebuildTranscriptDisplay]);
+
+  const maybeScheduleThinkingFiller = useCallback(() => {
+    clearThinkingFillerTimer();
+    const userTurnId = latestUserTurnId(sdkSnapshotRef.current);
+    if (
+      thinkingFillerShownRef.current ||
+      !thinkingActiveRef.current ||
+      (userTurnId !== null && lastFillerUserTurnRef.current === userTurnId)
+    ) {
+      return;
+    }
+    thinkingFillerTimerRef.current = window.setTimeout(() => {
+      thinkingFillerTimerRef.current = null;
+      if (!activeRef.current || !thinkingActiveRef.current || thinkingFillerShownRef.current) {
+        return;
+      }
+      const activeUserTurnId = latestUserTurnId(sdkSnapshotRef.current);
+      if (
+        activeUserTurnId !== null &&
+        lastFillerUserTurnRef.current === activeUserTurnId
+      ) {
+        return;
+      }
+      thinkingFillerShownRef.current = true;
+      lastFillerUserTurnRef.current = activeUserTurnId;
+      fillerLineRef.current = {
+        role: 'assistant',
+        text: THINKING_FILLER_TEXT,
+        ts: new Date().toISOString(),
+        final: true,
+        filler: true,
+      };
+      rebuildTranscriptDisplay();
+    }, THINKING_FILLER_DELAY_MS);
+  }, [clearThinkingFillerTimer, rebuildTranscriptDisplay]);
 
   const cleanupVoiceStack = useCallback(async () => {
     const voiceAiRuntime = voiceAiRuntimeRef.current;
@@ -192,7 +194,15 @@ export function useVoiceAssistant() {
     }
     micTrackRef.current = null;
     setMicMuted(false);
-  }, []);
+    thinkingActiveRef.current = false;
+    sdkSnapshotRef.current = [];
+    agentSpeakingRef.current = false;
+    greetingCompleteRef.current = false;
+    fillerLineRef.current = null;
+    lastFillerUserTurnRef.current = null;
+    orderCompletedRef.current = false;
+    resetThinkingFillerTurn();
+  }, [resetThinkingFillerTurn]);
 
   const handleSessionEnded = useCallback(
     async (message: string) => {
@@ -345,36 +355,60 @@ export function useVoiceAssistant() {
         rtmClient,
         channel: startPayload.channel,
         shopperRtcUid: startPayload.shopperRtcUid,
-        onTranscripts: (lines) => {
-          if (!activeRef.current || lines.length === 0) return;
-          setTranscripts((prev) => {
-            const next = mergeTranscripts(prev, lines);
-            for (const line of lines) {
-              if (line.role === 'user' && isUserGoodbyeIntent(line.text)) {
-                farewellPendingRef.current = true;
-                farewellAssistantHeardRef.current = false;
-              }
-              if (line.role === 'assistant' && farewellPendingRef.current) {
-                farewellAssistantHeardRef.current = true;
-              }
+        onTranscriptSnapshot: (snapshot) => {
+          if (!activeRef.current) return;
+          const previousUserTurn = latestUserTurnId(sdkSnapshotRef.current);
+          sdkSnapshotRef.current = snapshot;
+          const nextUserTurn = latestUserTurnId(snapshot);
+          if (nextUserTurn !== null && nextUserTurn !== previousUserTurn) {
+            thinkingFillerShownRef.current = false;
+            fillerLineRef.current = null;
+            clearThinkingFillerTimer();
+          }
+          rebuildTranscriptDisplay();
+          for (const item of snapshot) {
+            if (
+              item.role === 'user' &&
+              isUserGoodbyeIntent(item.text, { orderCompleted: orderCompletedRef.current })
+            ) {
+              farewellPendingRef.current = true;
+              farewellAssistantHeardRef.current = false;
             }
-            return next;
-          });
+            if (item.role === 'assistant' && farewellPendingRef.current && item.final) {
+              farewellAssistantHeardRef.current = true;
+            }
+          }
         },
         onSpeaking: (active) => {
           if (!activeRef.current) return;
-          setState(active ? 'speaking' : 'listening');
-          if (
-            !active &&
-            farewellPendingRef.current &&
-            farewellAssistantHeardRef.current
-          ) {
-            scheduleGracefulStopAfterFarewell();
+          agentSpeakingRef.current = active;
+          if (active) {
+            clearThinkingFillerTimer();
+            fillerLineRef.current = null;
+            setState('speaking');
+          } else {
+            if (!greetingCompleteRef.current) {
+              greetingCompleteRef.current = true;
+            }
+            setState('listening');
+            if (farewellPendingRef.current && farewellAssistantHeardRef.current) {
+              scheduleGracefulStopAfterFarewell();
+            }
           }
+          rebuildTranscriptDisplay();
         },
         onThinking: (active) => {
           if (!activeRef.current) return;
-          setState(active ? 'thinking' : 'listening');
+          thinkingActiveRef.current = active;
+          if (active) {
+            setState('thinking');
+            maybeScheduleThinkingFiller();
+          } else {
+            clearThinkingFillerTimer();
+            if (!agentSpeakingRef.current) {
+              setState(greetingCompleteRef.current ? 'listening' : 'connecting');
+            }
+          }
         },
         onAgentError: () => {
           if (!activeRef.current) return;
@@ -382,9 +416,9 @@ export function useVoiceAssistant() {
         },
       });
 
-      if (activeRef.current) setState('listening');
+      if (activeRef.current && greetingCompleteRef.current) setState('listening');
     },
-    [handleSessionEnded, scheduleGracefulStopAfterFarewell],
+    [handleSessionEnded, maybeScheduleThinkingFiller, clearThinkingFillerTimer, rebuildTranscriptDisplay, resetThinkingFillerTurn, scheduleGracefulStopAfterFarewell],
   );
 
   const startAssistant = useCallback(
@@ -407,6 +441,14 @@ export function useVoiceAssistant() {
       }
 
       clearFarewellState();
+      resetThinkingFillerTurn();
+      sdkSnapshotRef.current = [];
+      agentSpeakingRef.current = false;
+      greetingCompleteRef.current = false;
+      fillerLineRef.current = null;
+      lastFillerUserTurnRef.current = null;
+      orderCompletedRef.current = false;
+      setTranscripts([]);
       setError('');
       setNotice('');
       setMicMuted(false);
@@ -439,14 +481,6 @@ export function useVoiceAssistant() {
           setReplayAudioDucked(true);
         }
 
-        setTranscripts([
-          {
-            role: 'assistant',
-            text: startPayload.greeting,
-            ts: new Date().toISOString(),
-          },
-        ]);
-
         await connectAgoraRtc(startPayload);
 
         const activatePayload = await api.activateVoiceAiSession({
@@ -461,7 +495,7 @@ export function useVoiceAssistant() {
         }
 
         setNotice('Private Agora voice session active. Speak naturally to the assistant.');
-        if (activeRef.current) setState('listening');
+        if (activeRef.current && greetingCompleteRef.current) setState('listening');
       } catch (err) {
         activeRef.current = false;
         await cleanupVoiceStack();
@@ -473,7 +507,7 @@ export function useVoiceAssistant() {
         setError(err instanceof Error ? err.message : 'Could not start Voice AI');
       }
     },
-    [cleanupVoiceStack, clearFarewellState, connectAgoraRtc, pathname, subscribeAgentAudio],
+    [cleanupVoiceStack, clearFarewellState, connectAgoraRtc, pathname, resetThinkingFillerTurn, subscribeAgentAudio],
   );
 
   useEffect(() => {
@@ -495,6 +529,9 @@ export function useVoiceAssistant() {
           }
           if (session.cartUpdated) {
             await cartRefreshRef.current?.();
+          }
+          if (session.orderCompleted) {
+            orderCompletedRef.current = true;
           }
         })
         .catch(async (err: unknown) => {

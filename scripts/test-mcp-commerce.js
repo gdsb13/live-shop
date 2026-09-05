@@ -189,6 +189,7 @@ async function main() {
     const expected = [
       'addToCart',
       'checkServiceability',
+      'checkout',
       'compareProducts',
       'getCart',
       'getCurrentPrice',

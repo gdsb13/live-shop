@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { onReplayAudioDuck } from '@/lib/replayAudioBridge';
+import { onReplayAudioDuck, REPLAY_DUCKED_VOLUME } from '@/lib/replayAudioBridge';
 
 function resolvePlaybackUrl(sessionId: string, recordingUrl: string | null | undefined) {
   if (recordingUrl && recordingUrl.startsWith('/')) {
@@ -23,6 +23,7 @@ export function ReplayPlayerPanel({
   title: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const volumeRestoreRef = useRef(1);
   const [error, setError] = useState('');
   const playbackUrl = resolvePlaybackUrl(sessionId, recordingUrl);
 
@@ -30,7 +31,12 @@ export function ReplayPlayerPanel({
     return onReplayAudioDuck((ducked) => {
       const video = videoRef.current;
       if (!video) return;
-      video.volume = ducked ? 0 : 1;
+      if (ducked) {
+        volumeRestoreRef.current = video.volume;
+        video.volume = REPLAY_DUCKED_VOLUME;
+        return;
+      }
+      video.volume = volumeRestoreRef.current;
     });
   }, []);
 

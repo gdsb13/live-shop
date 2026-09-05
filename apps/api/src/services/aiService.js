@@ -341,6 +341,8 @@ function getVoiceSession(sessionId) {
     surface: record.surface,
     channel: record.channel,
     cartUpdated,
+    orderCompleted: Boolean(record.orderCompleted),
+    lastOrderId: record.lastOrderId || null,
     cart: cartService.getCart(record.shopperUserId),
     transcripts: Array.isArray(record.transcripts) ? record.transcripts.slice(-20) : [],
   };

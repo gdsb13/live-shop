@@ -7,7 +7,7 @@
     "description": "Crystal Processor 4K upscales content with vivid colour and sharp detail. A premium television for streaming, sports and movies. Smart TV with popular streaming apps and voice assistant support.",
     "keywords": ["tv", "television", "smart tv", "samsung tv", "4k tv", "led tv", "flat screen"],
     "basePrice": 42999,
-    "images": ["https://images.unsplash.com/photo-1593359677873-a4bb92f829d1?w=800&q=80"],
+    "images": ["https://images.unsplash.com/photo-1593784991095-a205069470b6?w=800&q=80"],
     "variants": [
       { "id": "v-43", "name": "43 inch", "sku": "SAM-TV-43", "price": 32999, "inStock": true, "attributes": { "screen": "43\"" } },
       { "id": "v-55", "name": "55 inch", "sku": "SAM-TV-55", "price": 42999, "inStock": true, "attributes": { "screen": "55\"" } },

@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import { attachRtcChat, detachRtcChat } from '@/lib/agora/rtcChatBridge';
 import { viewerRtcUserId } from '@/lib/agora/identity';
 import { joinRtcChannel, releaseRtcChannel } from '@/lib/agora/rtcSession';
-import { onLiveAudioDuck } from '@/lib/liveAudioBridge';
+import { LIVE_DUCKED_VOLUME_PERCENT, onLiveAudioDuck } from '@/lib/liveAudioBridge';
 
 type ConnectionState = 'idle' | 'connecting' | 'watching' | 'waiting' | 'ended' | 'error';
 
@@ -13,11 +13,18 @@ export function useViewerPlayer(sessionId: string, sessionStatus: string) {
   const videoRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<import('agora-rtc-sdk-ng').IAgoraRTCClient | null>(null);
   const hostAudioTracksRef = useRef<Array<import('agora-rtc-sdk-ng').IRemoteAudioTrack | null>>([]);
+  const hostVolumeRestoreRef = useRef(100);
   const userIdRef = useRef('');
   const channelRef = useRef('');
   const connectGenRef = useRef(0);
   const [state, setState] = useState<ConnectionState>('idle');
   const [statusText, setStatusText] = useState('');
+
+  const applyHostAudioVolume = useCallback((volume: number) => {
+    hostAudioTracksRef.current.forEach((track) => {
+      track?.setVolume(volume);
+    });
+  }, []);
 
   const cleanup = useCallback(async () => {
     hostAudioTracksRef.current = [];
@@ -79,6 +86,7 @@ export function useViewerPlayer(sessionId: string, sessionStatus: string) {
           setStatusText('Watching host live.');
         }
         if (mediaType === 'audio' && remoteUser.audioTrack) {
+          remoteUser.audioTrack.setVolume(hostVolumeRestoreRef.current);
           remoteUser.audioTrack.play();
           hostAudioTracksRef.current.push(remoteUser.audioTrack);
         }
@@ -126,8 +134,9 @@ export function useViewerPlayer(sessionId: string, sessionStatus: string) {
         }
         if (remoteUser.hasAudio) {
           await client.subscribe(remoteUser, 'audio');
-          remoteUser.audioTrack?.play();
           if (remoteUser.audioTrack) {
+            remoteUser.audioTrack.setVolume(hostVolumeRestoreRef.current);
+            remoteUser.audioTrack.play();
             hostAudioTracksRef.current.push(remoteUser.audioTrack);
           }
         }
@@ -188,11 +197,15 @@ export function useViewerPlayer(sessionId: string, sessionStatus: string) {
 
   useEffect(() => {
     return onLiveAudioDuck((ducked) => {
-      hostAudioTracksRef.current.forEach((track) => {
-        track?.setVolume(ducked ? 0 : 100);
-      });
+      if (ducked) {
+        hostVolumeRestoreRef.current =
+          hostVolumeRestoreRef.current > 0 ? hostVolumeRestoreRef.current : 100;
+        applyHostAudioVolume(LIVE_DUCKED_VOLUME_PERCENT);
+        return;
+      }
+      applyHostAudioVolume(hostVolumeRestoreRef.current);
     });
-  }, []);
+  }, [applyHostAudioVolume]);
 
   return { videoRef, state, statusText };
 }

@@ -235,6 +235,16 @@ img {
   border-radius: var(--radius);
   overflow: hidden;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.product-card-link {
+  color: inherit;
+  text-decoration: none;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .product-card:hover {
@@ -270,6 +280,29 @@ img {
   margin: 8px 0;
   font-size: 1.05rem;
   line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.7em;
+}
+
+.product-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px 16px;
+}
+
+.product-card-add {
+  flex: 1;
+  justify-content: center;
+}
+
+.product-card-add-note {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .product-card-footer {
@@ -886,6 +919,29 @@ img {
 .agora-media-control.is-off {
   border-color: #b45309;
   color: #92400e;
+  background: #fffbeb;
+}
+
+.agora-icon-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+}
+
+.agora-end-broadcast {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-color: #fda29b;
+  color: #b42318;
+  background: #fef3f2;
+}
+
+.agora-end-broadcast:hover {
+  background: #fee4e2;
 }
 
 .agora-video-shell {
@@ -1132,6 +1188,17 @@ img {
   animation: none;
 }
 
+.voice-ai-orb--muted {
+  background: #475569;
+  animation: none;
+  opacity: 0.75;
+}
+
+.voice-ai-line--filler {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
 @keyframes voice-ai-pulse {
   0%,
   100% {
@@ -1151,6 +1218,9 @@ img {
 }
 
 .voice-ai-panel__mic {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   border: 1px solid var(--border);
   background: var(--surface-muted);
   border-radius: 999px;

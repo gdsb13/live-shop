@@ -6,6 +6,7 @@ const serviceabilityService = require('./serviceabilityService');
 const paymentOptionsService = require('./paymentOptionsService');
 const liveSessionService = require('./liveSessionService');
 const discountService = require('./discountService');
+const checkoutService = require('./checkoutService');
 const shopperContext = require('./shopperContext');
 const { ALLOWED_TOOL_NAMES } = require('./aiToolDefinitions');
 const { validateToolInput } = require('./aiToolValidation');
@@ -216,6 +217,22 @@ function removeFromCart({ productId } = {}, sessionContext = {}) {
   };
 }
 
+function checkoutOrder({ paymentMethod, deliveryPin } = {}, sessionContext = {}) {
+  const shopperId = cartShopperId(sessionContext);
+  const order = checkoutService.checkout({ paymentMethod, deliveryPin, shopperId });
+  return {
+    success: true,
+    orderId: order.orderId,
+    status: order.status,
+    message: `Order ${order.orderId} confirmed. ${order.message}`,
+    subtotal: order.subtotal,
+    discountTotal: order.discountTotal || 0,
+    paymentMethod: order.paymentMethod,
+    deliveryPin: order.deliveryPin || null,
+    itemCount: order.items.length,
+  };
+}
+
 function buildLiveContext(liveSessionId) {
   if (!liveSessionId) return null;
   const session = liveSessionService.getSessionById(liveSessionId);
@@ -257,6 +274,8 @@ function executeTool(toolName, args, sessionContext = {}) {
       return addToCart(input, sessionContext);
     case 'removeFromCart':
       return removeFromCart(input, sessionContext);
+    case 'checkout':
+      return checkoutOrder(input, sessionContext);
     default:
       throw httpError(`Unsupported tool "${toolName}"`, 400);
   }
@@ -274,4 +293,5 @@ module.exports = {
   getCurrentPrice,
   addToCart,
   removeFromCart,
+  checkoutOrder,
 };

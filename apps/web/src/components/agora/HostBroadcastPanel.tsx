@@ -1,5 +1,6 @@
 'use client';
 
+import { Mic, MicOff, Square, Video, VideoOff } from 'lucide-react';
 import { useHostBroadcast } from '@/hooks/useHostBroadcast';
 
 export function HostBroadcastPanel({
@@ -67,22 +68,37 @@ export function HostBroadcastPanel({
         {state === 'live' && (
           <>
             <button
-              className={`button-secondary agora-media-control ${!micOn ? 'is-off' : ''}`}
+              className={`button-secondary agora-icon-control agora-media-control ${!micOn ? 'is-off' : ''}`}
               type="button"
               onClick={toggleMic}
               aria-pressed={micOn}
+              aria-label={micOn ? 'Mute microphone' : 'Unmute microphone'}
+              title={micOn ? 'Mute microphone' : 'Unmute microphone'}
             >
-              {micOn ? 'Mute' : 'Unmute'}
+              {micOn ? <Mic size={20} aria-hidden="true" /> : <MicOff size={20} aria-hidden="true" />}
             </button>
             <button
-              className={`button-secondary agora-media-control ${!cameraOn ? 'is-off' : ''}`}
+              className={`button-secondary agora-icon-control agora-media-control ${!cameraOn ? 'is-off' : ''}`}
               type="button"
               onClick={toggleCamera}
               aria-pressed={cameraOn}
+              aria-label={cameraOn ? 'Stop video' : 'Start video'}
+              title={cameraOn ? 'Stop video' : 'Start video'}
             >
-              {cameraOn ? 'Stop video' : 'Start video'}
+              {cameraOn ? (
+                <Video size={20} aria-hidden="true" />
+              ) : (
+                <VideoOff size={20} aria-hidden="true" />
+              )}
             </button>
-            <button className="button-secondary" type="button" onClick={endBroadcast}>
+            <button
+              className="button-secondary agora-end-broadcast"
+              type="button"
+              onClick={endBroadcast}
+              aria-label="End broadcast"
+              title="End broadcast"
+            >
+              <Square size={16} aria-hidden="true" />
               End broadcast
             </button>
           </>
