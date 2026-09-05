@@ -86,6 +86,19 @@ function coalesceTranscriptLines(lines: VoiceTranscriptLine[]): VoiceTranscriptL
   return next;
 }
 
+function isUserGoodbyeIntent(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+  return (
+    /\b(bye|goodbye|good\s+bye)\b/.test(normalized) ||
+    /\b(that'?s all|that is all|thanks,? that'?s all|thank you,? that'?s all)\b/.test(
+      normalized,
+    ) ||
+    /\b(end (the )?conversation|stop talking)\b/.test(normalized) ||
+    /^(stop|thanks\.?\s*)$/.test(normalized)
+  );
+}
+
 function mergeTranscripts(
   current: VoiceTranscriptLine[],
   incoming: VoiceTranscriptLine[],
@@ -120,6 +133,7 @@ export function useVoiceAssistant() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [transcripts, setTranscripts] = useState<VoiceTranscriptLine[]>([]);
+  const [micMuted, setMicMuted] = useState(false);
   const sessionIdRef = useRef('');
   const shopperUserIdRef = useRef(voiceShopperUserId());
   const shopperRtcUidRef = useRef(allocateVoiceShopperRtcUid());
@@ -131,6 +145,19 @@ export function useVoiceAssistant() {
   const activeRef = useRef(false);
   const cartRefreshRef = useRef<(() => Promise<void>) | null>(null);
   const applyCartRef = useRef<((cart: Cart) => void) | null>(null);
+  const farewellPendingRef = useRef(false);
+  const farewellAssistantHeardRef = useRef(false);
+  const farewellStopTimerRef = useRef<number | null>(null);
+  const stopAssistantRef = useRef<(() => Promise<void>) | null>(null);
+
+  const clearFarewellState = useCallback(() => {
+    farewellPendingRef.current = false;
+    farewellAssistantHeardRef.current = false;
+    if (farewellStopTimerRef.current !== null) {
+      window.clearTimeout(farewellStopTimerRef.current);
+      farewellStopTimerRef.current = null;
+    }
+  }, []);
 
   const cleanupVoiceStack = useCallback(async () => {
     const voiceAiRuntime = voiceAiRuntimeRef.current;
@@ -164,6 +191,7 @@ export function useVoiceAssistant() {
       // Track may already be closed.
     }
     micTrackRef.current = null;
+    setMicMuted(false);
   }, []);
 
   const handleSessionEnded = useCallback(
@@ -173,17 +201,19 @@ export function useVoiceAssistant() {
       setError(message);
       setState('error');
       setNotice('');
+      clearFarewellState();
       await cleanupVoiceStack();
       setLiveAudioDucked(false);
       setReplayAudioDucked(false);
       setPollSessionId('');
       sessionIdRef.current = '';
     },
-    [cleanupVoiceStack],
+    [cleanupVoiceStack, clearFarewellState],
   );
 
   const stopAssistant = useCallback(async () => {
     activeRef.current = false;
+    clearFarewellState();
     await cleanupVoiceStack();
     setLiveAudioDucked(false);
     setReplayAudioDucked(false);
@@ -203,7 +233,30 @@ export function useVoiceAssistant() {
 
     setState('idle');
     setOpen(false);
-  }, [cleanupVoiceStack]);
+  }, [cleanupVoiceStack, clearFarewellState]);
+
+  stopAssistantRef.current = stopAssistant;
+
+  const scheduleGracefulStopAfterFarewell = useCallback(() => {
+    if (farewellStopTimerRef.current !== null) return;
+    farewellStopTimerRef.current = window.setTimeout(() => {
+      farewellStopTimerRef.current = null;
+      if (!activeRef.current || !farewellPendingRef.current) return;
+      stopAssistantRef.current?.().catch(() => undefined);
+    }, 450);
+  }, []);
+
+  const toggleVoiceMicMuted = useCallback(async () => {
+    const track = micTrackRef.current;
+    if (!track || !activeRef.current) return;
+    const nextMuted = !micMuted;
+    try {
+      await track.setEnabled(!nextMuted);
+      setMicMuted(nextMuted);
+    } catch {
+      setNotice('Could not change microphone mute. Try again.');
+    }
+  }, [micMuted]);
 
   const subscribeAgentAudio = useCallback(
     async (client: import('agora-rtc-sdk-ng').IAgoraRTCClient) => {
@@ -294,11 +347,30 @@ export function useVoiceAssistant() {
         shopperRtcUid: startPayload.shopperRtcUid,
         onTranscripts: (lines) => {
           if (!activeRef.current || lines.length === 0) return;
-          setTranscripts((prev) => mergeTranscripts(prev, lines));
+          setTranscripts((prev) => {
+            const next = mergeTranscripts(prev, lines);
+            for (const line of lines) {
+              if (line.role === 'user' && isUserGoodbyeIntent(line.text)) {
+                farewellPendingRef.current = true;
+                farewellAssistantHeardRef.current = false;
+              }
+              if (line.role === 'assistant' && farewellPendingRef.current) {
+                farewellAssistantHeardRef.current = true;
+              }
+            }
+            return next;
+          });
         },
         onSpeaking: (active) => {
           if (!activeRef.current) return;
           setState(active ? 'speaking' : 'listening');
+          if (
+            !active &&
+            farewellPendingRef.current &&
+            farewellAssistantHeardRef.current
+          ) {
+            scheduleGracefulStopAfterFarewell();
+          }
         },
         onThinking: (active) => {
           if (!activeRef.current) return;
@@ -312,7 +384,7 @@ export function useVoiceAssistant() {
 
       if (activeRef.current) setState('listening');
     },
-    [handleSessionEnded],
+    [handleSessionEnded, scheduleGracefulStopAfterFarewell],
   );
 
   const startAssistant = useCallback(
@@ -334,8 +406,10 @@ export function useVoiceAssistant() {
         await new Promise((resolve) => window.setTimeout(resolve, 900));
       }
 
+      clearFarewellState();
       setError('');
       setNotice('');
+      setMicMuted(false);
       setState('connecting');
       setOpen(true);
       activeRef.current = true;
@@ -399,7 +473,7 @@ export function useVoiceAssistant() {
         setError(err instanceof Error ? err.message : 'Could not start Voice AI');
       }
     },
-    [cleanupVoiceStack, connectAgoraRtc, pathname, subscribeAgentAudio],
+    [cleanupVoiceStack, clearFarewellState, connectAgoraRtc, pathname, subscribeAgentAudio],
   );
 
   useEffect(() => {
@@ -458,6 +532,8 @@ export function useVoiceAssistant() {
     audioAnchorRef,
     startAssistant,
     stopAssistant,
+    toggleVoiceMicMuted,
+    micMuted,
     setOpen,
   };
 }

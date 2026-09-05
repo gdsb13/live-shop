@@ -10,27 +10,44 @@ export default function CartPage() {
   const { cart, refreshCart } = useCart();
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [updatingItemId, setUpdatingItemId] = useState('');
 
   async function updateQuantity(itemId: string, quantity: number) {
     setError('');
     setMessage('');
+    setUpdatingItemId(itemId);
     try {
       await api.updateCartItem(itemId, quantity);
       await refreshCart();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update item');
+    } finally {
+      setUpdatingItemId('');
     }
+  }
+
+  async function adjustQuantity(itemId: string, currentQuantity: number, delta: number) {
+    const nextQuantity = currentQuantity + delta;
+    if (nextQuantity <= 0) {
+      await removeItem(itemId);
+      return;
+    }
+    if (nextQuantity > 10) return;
+    await updateQuantity(itemId, nextQuantity);
   }
 
   async function removeItem(itemId: string) {
     setError('');
     setMessage('');
+    setUpdatingItemId(itemId);
     try {
       await api.removeCartItem(itemId);
       await refreshCart();
       setMessage('Item removed.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not remove item');
+    } finally {
+      setUpdatingItemId('');
     }
   }
 
@@ -61,14 +78,29 @@ export default function CartPage() {
                   <div className="brand">{item.brand}</div>
                   <div>{item.variantName}</div>
                   <div className="row" style={{ marginTop: 12 }}>
-                    <input
-                      className="quantity-input"
-                      type="number"
-                      min={1}
-                      max={10}
-                      value={item.quantity}
-                      onChange={(e) => updateQuantity(item.id, Number(e.target.value))}
-                    />
+                    <div className="qty-stepper">
+                      <button
+                        className="qty-stepper__btn"
+                        type="button"
+                        aria-label={`Decrease quantity of ${item.productName}`}
+                        disabled={updatingItemId === item.id}
+                        onClick={() => adjustQuantity(item.id, item.quantity, -1)}
+                      >
+                        −
+                      </button>
+                      <span className="qty-stepper__value" aria-live="polite">
+                        {item.quantity}
+                      </span>
+                      <button
+                        className="qty-stepper__btn"
+                        type="button"
+                        aria-label={`Increase quantity of ${item.productName}`}
+                        disabled={updatingItemId === item.id || item.quantity >= 10}
+                        onClick={() => adjustQuantity(item.id, item.quantity, 1)}
+                      >
+                        +
+                      </button>
+                    </div>
                     <button className="button-secondary" type="button" onClick={() => removeItem(item.id)}>
                       Remove
                     </button>

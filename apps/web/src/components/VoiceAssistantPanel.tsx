@@ -2,8 +2,9 @@
 
 import { useCart } from '@/components/CartProvider';
 import { useVoiceAssistant } from '@/hooks/useVoiceAssistant';
+import type { VoiceAssistantState } from '@/lib/voice/types';
 
-const STATE_LABELS: Record<string, string> = {
+const STATE_LABELS: Record<VoiceAssistantState, string> = {
   idle: 'Ready',
   connecting: 'Connecting…',
   listening: 'Listening',
@@ -14,8 +15,21 @@ const STATE_LABELS: Record<string, string> = {
 
 export function VoiceAssistantPanel() {
   const { refreshCart, applyCart } = useCart();
-  const { open, state, error, notice, transcripts, audioAnchorRef, startAssistant, stopAssistant, setOpen } =
-    useVoiceAssistant();
+  const {
+    open,
+    state,
+    error,
+    notice,
+    transcripts,
+    audioAnchorRef,
+    startAssistant,
+    stopAssistant,
+    toggleVoiceMicMuted,
+    micMuted,
+    setOpen,
+  } = useVoiceAssistant();
+
+  const sessionActive = open && state !== 'idle' && state !== 'error';
 
   if (!open && state === 'idle') {
     return (
@@ -42,6 +56,14 @@ export function VoiceAssistantPanel() {
         </button>
       </header>
 
+      <div className="voice-ai-panel__status">
+        <div
+          className={`voice-ai-orb voice-ai-orb--${state}`}
+          role="status"
+          aria-label={STATE_LABELS[state] || state}
+        />
+      </div>
+
       {notice ? <p className="voice-ai-panel__notice">{notice}</p> : null}
       {error ? <p className="voice-ai-panel__error">{error}</p> : null}
 
@@ -57,6 +79,19 @@ export function VoiceAssistantPanel() {
           ))
         )}
       </div>
+
+      {sessionActive ? (
+        <div className="voice-ai-panel__controls">
+          <button
+            type="button"
+            className={`voice-ai-panel__mic ${micMuted ? 'is-muted' : ''}`}
+            onClick={() => toggleVoiceMicMuted()}
+            aria-pressed={!micMuted}
+          >
+            {micMuted ? 'Unmute mic' : 'Mute mic'}
+          </button>
+        </div>
+      ) : null}
 
       <div ref={audioAnchorRef} className="voice-ai-panel__audio" aria-hidden="true" />
 
