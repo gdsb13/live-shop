@@ -6,6 +6,33 @@ function httpError(message, status) {
   return err;
 }
 
+function normalizePaymentMethod(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '';
+  if (raw === 'upi' || raw.includes('upi') || raw.includes('gpay') || raw.includes('phonepe')) {
+    return 'upi';
+  }
+  if (
+    raw === 'card' ||
+    raw.includes('credit') ||
+    raw.includes('debit') ||
+    raw.includes('visa') ||
+    raw.includes('mastercard') ||
+    raw.includes('rupay')
+  ) {
+    return 'card';
+  }
+  if (
+    raw === 'cod' ||
+    raw.includes('cash on delivery') ||
+    raw.includes('cash-on-delivery') ||
+    raw === 'cash'
+  ) {
+    return 'cod';
+  }
+  return raw;
+}
+
 // Validate LLM-generated arguments before executing business logic.
 function validateToolInput(toolName, args) {
   const input = args && typeof args === 'object' ? args : {};
@@ -59,14 +86,17 @@ function validateToolInput(toolName, args) {
       break;
     case 'removeFromCart':
       break;
-    case 'checkout':
-      if (!input.paymentMethod || typeof input.paymentMethod !== 'string') {
-        throw httpError('checkout requires paymentMethod (upi, card, or cod)', 400);
+    case 'checkout': {
+      const paymentMethod = normalizePaymentMethod(input.paymentMethod);
+      if (!paymentMethod || !['upi', 'card', 'cod'].includes(paymentMethod)) {
+        throw httpError('checkout paymentMethod must be upi, card, or cod', 400);
       }
+      input.paymentMethod = paymentMethod;
       if (input.deliveryPin !== undefined && !/^[1-9][0-9]{5}$/.test(String(input.deliveryPin))) {
         throw httpError('checkout deliveryPin must be a valid six-digit Indian PIN when provided', 400);
       }
       break;
+    }
     default:
       throw httpError(`Unknown tool "${toolName}"`, 400);
   }
@@ -76,4 +106,5 @@ function validateToolInput(toolName, args) {
 
 module.exports = {
   validateToolInput,
+  normalizePaymentMethod,
 };

@@ -77,6 +77,12 @@ function enrichToolArgs(toolName, args, sessionContext) {
     next.productId = sessionContext.lastProductId;
   }
 
+  if (toolName === 'checkout') {
+    if (!next.deliveryPin && sessionContext.lastDeliveryPin) {
+      next.deliveryPin = sessionContext.lastDeliveryPin;
+    }
+  }
+
   return next;
 }
 
@@ -124,6 +130,13 @@ function runCommerceTool(toolName, args, headers) {
   if (toolName === 'getCurrentPrice' && result && result.variantId) {
     sessionContext.lastProductId = result.productId;
     sessionContext.lastVariantId = result.variantId;
+  }
+
+  if (toolName === 'checkServiceability' && result && result.serviceable && result.pin) {
+    sessionContext.lastDeliveryPin = result.pin;
+    if (sessionContext.id) {
+      aiSessionStore.updateSession(sessionContext.id, sessionContext);
+    }
   }
 
   if ((toolName === 'addToCart' || toolName === 'removeFromCart' || toolName === 'checkout') && result && result.success) {

@@ -174,6 +174,17 @@ pass "J checkout tool returns orderId after successful checkout"
 
 empty_cart "$SHOPPER_DEFAULT"
 
+# J2. checkout accepts spoken payment labels (credit card -> card)
+curl -sf -X POST "${SHOPPER_H[@]}" "$API/api/cart/items" -H 'Content-Type: application/json' \
+  -d '{"productId":"elec-phone-oneplus","variantId":"v-128-green","quantity":1}' >/dev/null
+checkout="$(curl -sf -X POST "${SHOPPER_H[@]}" "$API/api/ai/tools/checkout" -H 'Content-Type: application/json' \
+  -d '{"paymentMethod":"credit card","deliveryPin":"201014","context":{"shopperUserId":"'"$SHOPPER_DEFAULT"'"}}')"
+echo "$checkout" | grep -q '"success":true' || fail "checkout accepts credit card label"
+echo "$checkout" | grep -q '"paymentMethod":"card"' || fail "checkout normalizes to card id"
+pass "J2 checkout normalizes spoken payment method labels"
+
+empty_cart "$SHOPPER_DEFAULT"
+
 # K. expired live discount revalidated at checkout tool
 ensure_live_session "live-tech-tuesday"
 cart="$(curl -sf -X POST "${SHOPPER_H[@]}" "$API/api/cart/items" -H 'Content-Type: application/json' \
