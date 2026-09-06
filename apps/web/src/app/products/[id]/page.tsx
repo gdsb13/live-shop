@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useCart } from '@/components/CartProvider';
+import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/api';
 import { formatInr } from '@/lib/format';
 import type { PaymentOption, Product, Serviceability } from '@/lib/types';
@@ -13,6 +14,7 @@ export default function ProductDetailPage() {
   const searchParams = useSearchParams();
   const liveSessionId = searchParams.get('liveSession');
   const { refreshCart } = useCart();
+  const { showToast } = useToast();
   const [product, setProduct] = useState<Product | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -84,6 +86,7 @@ export default function ProductDetailPage() {
         originatingLiveSessionId: liveSessionId || undefined,
       });
       await refreshCart();
+      showToast(`Added ${product.name} to cart`);
       setMessage('Added to cart.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not add to cart');

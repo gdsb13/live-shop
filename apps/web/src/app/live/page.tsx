@@ -13,20 +13,27 @@ export default function LiveDiscoveryPage() {
 
   useEffect(() => {
     let active = true;
-    api
-      .getLiveSessions()
-      .then((sessions) => {
-        if (active) setData(sessions);
-      })
-      .catch((err: Error) => {
-        if (active) setError(err.message);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+
+    const load = () => {
+      api
+        .getLiveSessions()
+        .then((sessions) => {
+          if (active) setData(sessions);
+        })
+        .catch((err: Error) => {
+          if (active) setError(err.message);
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    };
+
+    load();
+    const interval = setInterval(load, 5000);
 
     return () => {
       active = false;
+      clearInterval(interval);
     };
   }, []);
 

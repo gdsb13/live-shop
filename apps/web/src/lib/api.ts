@@ -227,6 +227,7 @@ export const api = {
       channel: string;
       cartUpdated: boolean;
       orderCompleted?: boolean;
+      lastOrderId?: string | null;
       stopReason?: string | null;
       endReason?: string | null;
       cart: import('./types').Cart;

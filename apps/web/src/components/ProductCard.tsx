@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useCart } from '@/components/CartProvider';
+import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/api';
 import type { ProductSummary } from '@/lib/types';
 import { formatInr, productImageUrl } from '@/lib/format';
@@ -17,6 +18,7 @@ export function ProductCard({
   showAddToCart?: boolean;
 }) {
   const { refreshCart } = useCart();
+  const { showToast } = useToast();
   const [imgSrc, setImgSrc] = useState(productImageUrl(product.id, product.image));
   const [adding, setAdding] = useState(false);
   const [addMessage, setAddMessage] = useState('');
@@ -41,6 +43,7 @@ export function ProductCard({
         quantity: 1,
       });
       await refreshCart();
+      showToast(`Added ${product.name} to cart`);
       setAddMessage('Added');
       window.setTimeout(() => setAddMessage(''), 1800);
     } catch (err) {

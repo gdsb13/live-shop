@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
 import { allocateVoiceShopperRtcUid, voiceShopperUserId } from '@/lib/agora/identity';
+import { useToast } from '@/components/ToastProvider';
 import { setLiveAudioDucked } from '@/lib/liveAudioBridge';
 import { setReplayAudioDucked } from '@/lib/replayAudioBridge';
 import {
@@ -22,6 +23,7 @@ import {
   buildDisplayTranscript,
   findFinalAssistantTurnAfterUserTurn,
   isUserGoodbyeIntent,
+  isUserExplicitSessionEndIntent,
   shouldCancelFarewellPending,
   type SdkTranscriptItem,
 } from '@/lib/voice/transcriptTurns';
@@ -79,9 +81,8 @@ export function useVoiceAssistant() {
   const cartRefreshRef = useRef<(() => Promise<void>) | null>(null);
   const applyCartRef = useRef<((cart: Cart) => void) | null>(null);
   const farewellPendingRef = useRef(false);
-  const farewellAssistantHeardRef = useRef(false);
   const farewellAnchorTurnIdRef = useRef<number | null>(null);
-  const farewellReassertionsRef = useRef(0);
+  const stoppingRef = useRef(false);
   const stopAssistantRef = useRef<
     ((reason?: 'user_stop' | 'farewell') => Promise<void>) | null
   >(null);
@@ -90,6 +91,8 @@ export function useVoiceAssistant() {
   const agentSpeakingRef = useRef(false);
   const greetingCompleteRef = useRef(false);
   const orderCompletedRef = useRef(false);
+  const orderToastedRef = useRef(false);
+  const { showToast } = useToast();
 
   const rebuildTranscriptDisplay = useCallback(() => {
     setTranscripts(
@@ -102,9 +105,7 @@ export function useVoiceAssistant() {
 
   const clearFarewellState = useCallback(() => {
     farewellPendingRef.current = false;
-    farewellAssistantHeardRef.current = false;
     farewellAnchorTurnIdRef.current = null;
-    farewellReassertionsRef.current = 0;
   }, []);
 
   const resetAgentUiState = useCallback(() => {
@@ -173,43 +174,56 @@ export function useVoiceAssistant() {
   );
 
   const stopAssistant = useCallback(async (reason: 'user_stop' | 'farewell' = 'user_stop') => {
+    if (stoppingRef.current) return;
+    stoppingRef.current = true;
     activeRef.current = false;
     clearFarewellState();
-    await cleanupVoiceStack({ preserveTranscript: reason === 'farewell' });
-    setLiveAudioDucked(false);
-    setReplayAudioDucked(false);
 
     const sessionId = sessionIdRef.current;
     const shopperUserId = shopperUserIdRef.current;
     sessionIdRef.current = '';
     setPollSessionId('');
 
-    if (sessionId) {
-      try {
-        await api.stopVoiceAiSession({ sessionId, shopperUserId, reason });
-      } catch {
-        // ignore stop errors during cleanup
-      }
-    }
+    setState('idle');
+    setOpen(false);
+    setNotice('');
+    setError('');
 
-    if (reason === 'farewell') {
-      setState('ended');
-      setOpen(true);
-      setNotice('');
-      setError('');
-    } else {
-      setState('idle');
-      setOpen(false);
+    try {
+      await cleanupVoiceStack();
+      setLiveAudioDucked(false);
+      setReplayAudioDucked(false);
+      if (sessionId) {
+        try {
+          await api.stopVoiceAiSession({ sessionId, shopperUserId, reason: 'user_stop' });
+        } catch {
+          // ignore stop errors during cleanup
+        }
+      }
+    } finally {
+      stoppingRef.current = false;
     }
   }, [cleanupVoiceStack, clearFarewellState]);
 
   stopAssistantRef.current = stopAssistant;
 
-  const completeFarewellStop = useCallback(() => {
-    if (!activeRef.current || !farewellPendingRef.current || !farewellAssistantHeardRef.current) {
-      return;
-    }
-    stopAssistantRef.current?.('farewell').catch(() => undefined);
+  const tryCompleteSessionEnd = useCallback(() => {
+    if (!activeRef.current || stoppingRef.current) return;
+    if (!farewellPendingRef.current || farewellAnchorTurnIdRef.current === null) return;
+
+    const anchorTurn = sdkSnapshotRef.current.find(
+      (item) => item.role === 'user' && item.turnId === farewellAnchorTurnIdRef.current,
+    );
+    if (!anchorTurn) return;
+
+    const assistantReply = findFinalAssistantTurnAfterUserTurn(
+      sdkSnapshotRef.current,
+      anchorTurn,
+    );
+    if (!assistantReply) return;
+    if (agentSpeakingRef.current || thinkingActiveRef.current) return;
+
+    stopAssistantRef.current?.('user_stop').catch(() => undefined);
   }, []);
 
   const toggleVoiceMicMuted = useCallback(async () => {
@@ -342,54 +356,32 @@ export function useVoiceAssistant() {
             .reverse()
             .find((item) => item.role === 'user' && item.final);
           if (latestUserTurn) {
-            if (isUserGoodbyeIntent(latestUserTurn.text, { orderCompleted: orderCompletedRef.current })) {
-              if (!farewellPendingRef.current) {
-                farewellPendingRef.current = true;
-                farewellAssistantHeardRef.current = false;
-                farewellAnchorTurnIdRef.current = latestUserTurn.turnId;
-                farewellReassertionsRef.current = 0;
-              }
+            if (isUserExplicitSessionEndIntent(latestUserTurn.text)) {
+              stopAssistantRef.current?.('user_stop').catch(() => undefined);
+            } else if (isUserGoodbyeIntent(latestUserTurn.text, { orderCompleted: orderCompletedRef.current })) {
+              farewellPendingRef.current = true;
+              farewellAnchorTurnIdRef.current = latestUserTurn.turnId;
             } else if (
               farewellPendingRef.current &&
-              !farewellAssistantHeardRef.current &&
               shouldCancelFarewellPending(latestUserTurn.text)
             ) {
               farewellPendingRef.current = false;
               farewellAnchorTurnIdRef.current = null;
             }
           }
-          if (farewellPendingRef.current && farewellAnchorTurnIdRef.current !== null) {
-            const anchorUserTurn = snapshot.find(
-              (item) =>
-                item.role === 'user' && item.turnId === farewellAnchorTurnIdRef.current,
-            );
-            if (anchorUserTurn) {
-              const laterAssistantTurn = findFinalAssistantTurnAfterUserTurn(
-                snapshot,
-                anchorUserTurn,
-              );
-              if (laterAssistantTurn) {
-                farewellAssistantHeardRef.current = true;
-              }
-            }
-          }
+          tryCompleteSessionEnd();
         },
         onSpeaking: (active) => {
           if (!activeRef.current) return;
           agentSpeakingRef.current = active;
           if (active) {
-            if (farewellPendingRef.current && !farewellAssistantHeardRef.current) {
-              farewellAssistantHeardRef.current = true;
-            }
             setState('speaking');
           } else {
             if (!greetingCompleteRef.current) {
               greetingCompleteRef.current = true;
             }
             setState('listening');
-            if (farewellPendingRef.current && farewellAssistantHeardRef.current) {
-              completeFarewellStop();
-            }
+            tryCompleteSessionEnd();
           }
           rebuildTranscriptDisplay();
         },
@@ -416,7 +408,7 @@ export function useVoiceAssistant() {
 
       if (activeRef.current && greetingCompleteRef.current) setState('listening');
     },
-    [completeFarewellStop, handleSessionEnded, rebuildTranscriptDisplay, resetAgentUiState],
+    [handleSessionEnded, rebuildTranscriptDisplay, resetAgentUiState, tryCompleteSessionEnd],
   );
 
   const startAssistant = useCallback(
@@ -444,6 +436,7 @@ export function useVoiceAssistant() {
       agentSpeakingRef.current = false;
       greetingCompleteRef.current = false;
       orderCompletedRef.current = false;
+      orderToastedRef.current = false;
       setTranscripts([]);
       setError('');
       setNotice('');
@@ -528,9 +521,14 @@ export function useVoiceAssistant() {
           }
           if (session.cartUpdated) {
             await cartRefreshRef.current?.();
+            showToast('Cart updated');
           }
           if (session.orderCompleted) {
             orderCompletedRef.current = true;
+            if (session.lastOrderId && !orderToastedRef.current) {
+              orderToastedRef.current = true;
+              showToast(`Order placed successfully — ${session.lastOrderId}`);
+            }
           }
         })
         .catch(async (err: unknown) => {
@@ -547,7 +545,7 @@ export function useVoiceAssistant() {
     tick();
     const poll = window.setInterval(tick, 1000);
     return () => window.clearInterval(poll);
-  }, [handleSessionEnded, open, pollSessionId]);
+  }, [handleSessionEnded, open, pollSessionId, showToast]);
 
   useEffect(() => {
     return () => {

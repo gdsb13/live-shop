@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { ProductCard } from '@/components/ProductCard';
 import { useCart } from '@/components/CartProvider';
+import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/api';
 import { formatInr, productImageUrl } from '@/lib/format';
 import type { LiveSession, Product } from '@/lib/types';
@@ -23,6 +24,7 @@ const LiveChatPanel = dynamic(
 export default function LiveSessionPage() {
   const params = useParams<{ sessionId: string }>();
   const { refreshCart } = useCart();
+  const { showToast } = useToast();
   const [session, setSession] = useState<LiveSession | null>(null);
   const [featuredProductDetail, setFeaturedProductDetail] = useState<Product | null>(null);
   const [featuredLivePricing, setFeaturedLivePricing] = useState<{
@@ -80,7 +82,7 @@ export default function LiveSessionPage() {
 
     const interval = setInterval(() => {
       loadSession().catch(() => undefined);
-    }, 10000);
+    }, 5000);
 
     return () => {
       active = false;
@@ -112,6 +114,7 @@ export default function LiveSessionPage() {
         originatingLiveSessionId: session.status === 'LIVE' ? session.id : undefined,
       });
       await refreshCart();
+      showToast(`Added ${session.featuredProduct.name} to cart`);
       setMessage('Added featured product to cart.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not add to cart');

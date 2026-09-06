@@ -30,9 +30,25 @@ export default function HostPage() {
   }, []);
 
   useEffect(() => {
-    loadSessions()
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false));
+    let active = true;
+
+    const load = () => {
+      loadSessions()
+        .catch((err: Error) => {
+          if (active) setError(err.message);
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    };
+
+    load();
+    const interval = setInterval(load, 5000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, [loadSessions]);
 
   async function runAction(

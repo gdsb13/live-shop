@@ -17,6 +17,37 @@ function pickDefaultVariant(product) {
   return product.variants.find((variant) => variant.inStock) || product.variants[0] || null;
 }
 
+function evaluateLivePricing(productId, variant, sessionContext = {}) {
+  const originatingLiveSessionId = discountService.trustedLiveSessionId(sessionContext);
+  const priced = discountService.evaluateLineItem({
+    unitPrice: variant.price,
+    quantity: 1,
+    productId,
+    originatingLiveSessionId,
+  });
+  return {
+    listPrice: priced.listPrice,
+    discountEligible: priced.discountEligible,
+    discountPercent: priced.discountPercent,
+    discountAmount: priced.discountAmount,
+    effectivePrice: priced.effectiveUnitPrice,
+    originatingLiveSessionId: priced.originatingLiveSessionId,
+  };
+}
+
+function enrichProductSummaryWithLivePricing(summary, sessionContext = {}) {
+  if (!summary || !summary.id) return summary;
+  const product = catalogService.getProductById(summary.id);
+  if (!product) return summary;
+  const variant = resolveProductVariant(product, summary.defaultVariantId);
+  if (!variant) return summary;
+  const pricing = evaluateLivePricing(product.id, variant, sessionContext);
+  return {
+    ...summary,
+    ...pricing,
+  };
+}
+
 function resolveProductVariant(product, variantHint) {
   if (!product) return null;
   const resolved = catalogService.resolveVariant(product, variantHint);
@@ -24,7 +55,7 @@ function resolveProductVariant(product, variantHint) {
   return pickDefaultVariant(product);
 }
 
-function searchProducts({ query, category }) {
+function searchProducts({ query, category }, sessionContext = {}) {
   const normalizedQuery = String(query || '').trim();
   const normalizedCategory = String(category || '').trim();
   if (!normalizedQuery && !normalizedCategory) {
@@ -40,7 +71,9 @@ function searchProducts({ query, category }) {
   });
   return {
     count: products.length,
-    products: products.slice(0, 5),
+    products: products
+      .slice(0, 5)
+      .map((product) => enrichProductSummaryWithLivePricing(product, sessionContext)),
   };
 }
 
@@ -74,7 +107,7 @@ function compareProducts({ productIds }) {
   return { products };
 }
 
-function getProduct({ productId }) {
+function getProduct({ productId }, sessionContext = {}) {
   const resolvedProductId = catalogService.resolveProductId(productId);
   if (!resolvedProductId) {
     return recoverableToolError(
@@ -99,7 +132,7 @@ function getProduct({ productId }) {
     inStock: variant.inStock,
     attributes: variant.attributes,
   }));
-  return {
+  const result = {
     id: product.id,
     name: product.name,
     brand: product.brand,
@@ -115,6 +148,12 @@ function getProduct({ productId }) {
     defaultVariantName: defaultVariant ? defaultVariant.name : null,
     defaultVariantPrice: defaultVariant ? defaultVariant.price : null,
   };
+
+  if (defaultVariant) {
+    Object.assign(result, evaluateLivePricing(product.id, defaultVariant, sessionContext));
+  }
+
+  return result;
 }
 
 function checkServiceability({ pin }) {
@@ -256,13 +295,21 @@ function addToCart({ productId, variantId, quantity = 1 }, sessionContext = {}) 
 
   const originatingLiveSessionId = discountService.trustedLiveSessionId(sessionContext);
   const shopperId = cartShopperId(sessionContext);
+  const sessionKey = originatingLiveSessionId || null;
+  const cartBefore = cartService.getCart(shopperId);
+  const existingBefore = cartBefore.items.find(
+    (item) =>
+      item.productId === productId &&
+      item.variantId === variant.id &&
+      (item.originatingLiveSessionId || null) === sessionKey,
+  );
+
   const cart = cartService.addItem(shopperId, {
     productId,
     variantId: variant.id,
     quantity: qty,
     originatingLiveSessionId,
   });
-  const sessionKey = originatingLiveSessionId || null;
   const addedItem = cart.items.find(
     (item) =>
       item.productId === productId &&
@@ -270,9 +317,16 @@ function addToCart({ productId, variantId, quantity = 1 }, sessionContext = {}) 
       (item.originatingLiveSessionId || null) === sessionKey,
   );
 
+  const quantityIncreased = Boolean(existingBefore);
+  const message = quantityIncreased
+    ? `Updated ${product.name} (${variant.name}) quantity to ${addedItem?.quantity ?? qty} in your cart`
+    : `Added ${product.name} (${variant.name}) to your cart`;
+
   return {
     success: true,
-    message: `Added ${product.name} (${variant.name}) to your cart`,
+    message,
+    quantityIncreased,
+    quantity: addedItem?.quantity ?? qty,
     productId: product.id,
     productName: product.name,
     variantId: variant.id,
@@ -404,9 +458,9 @@ function executeTool(toolName, args, sessionContext = {}) {
 
     switch (toolName) {
       case 'searchProducts':
-        return searchProducts(input);
+        return searchProducts(input, sessionContext);
       case 'getProduct':
-        return getProduct(input);
+        return getProduct(input, sessionContext);
       case 'compareProducts':
         return compareProducts(input);
       case 'checkServiceability':

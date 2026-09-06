@@ -146,6 +146,12 @@ export function findFinalAssistantTurnAfterUserTurn(
     .find((item) => item.role === 'assistant' && item.final);
 }
 
+export function isUserExplicitSessionEndIntent(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+  return /\b(end|stop) (the )?(call|conversation)\b/.test(normalized);
+}
+
 export function isUserGoodbyeIntent(
   text: string,
   options: { orderCompleted?: boolean } = {},

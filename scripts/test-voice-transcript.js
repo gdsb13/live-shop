@@ -131,6 +131,12 @@ function findFinalAssistantTurnAfterUserTurn(snapshot, userTurn) {
   return snapshot.slice(anchorIndex + 1).find((item) => item.role === 'assistant' && item.final);
 }
 
+function isUserExplicitSessionEndIntent(text) {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+  return /\b(end|stop) (the )?(call|conversation)\b/.test(normalized);
+}
+
 function isUserGoodbyeIntent(text, options = {}) {
   const normalized = text.trim().toLowerCase();
   if (!normalized) return false;
@@ -157,6 +163,10 @@ if (!isUserGoodbyeIntent("Yeah. That's all. Thank you.")) fail("that's all thank
 if (!isUserGoodbyeIntent('You can end the session.')) fail('end the session should close');
 if (!isUserGoodbyeIntent("That's all. Thanks.")) fail("that's all thanks should close");
 if (!isUserGoodbyeIntent('Goodbye.')) fail('goodbye should close');
+if (!isUserExplicitSessionEndIntent('End the call.')) fail('end the call should end session');
+if (!isUserExplicitSessionEndIntent('Stop the call.')) fail('stop the call should end session');
+if (!isUserExplicitSessionEndIntent('End the conversation.')) fail('end the conversation should end session');
+if (isUserGoodbyeIntent('End the call.')) fail('end the call uses explicit session end, not goodbye');
 if (isUserGoodbyeIntent('Are you there?')) fail('presence check is not goodbye');
 if (shouldCancelFarewellPending('Thank you very much.')) fail('extra thanks should not cancel farewell');
 if (shouldCancelFarewellPending('Are you there?')) fail('presence check should not cancel farewell');

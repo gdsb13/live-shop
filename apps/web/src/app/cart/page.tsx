@@ -3,22 +3,27 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useCart } from '@/components/CartProvider';
+import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/api';
 import { formatInr } from '@/lib/format';
 
 export default function CartPage() {
   const { cart, refreshCart } = useCart();
+  const { showToast } = useToast();
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [updatingItemId, setUpdatingItemId] = useState('');
 
-  async function updateQuantity(itemId: string, quantity: number) {
+  async function updateQuantity(itemId: string, quantity: number, productName?: string) {
     setError('');
     setMessage('');
     setUpdatingItemId(itemId);
     try {
       await api.updateCartItem(itemId, quantity);
       await refreshCart();
+      if (productName) {
+        showToast(`Updated ${productName} quantity to ${quantity}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update item');
     } finally {
@@ -33,7 +38,7 @@ export default function CartPage() {
       return;
     }
     if (nextQuantity > 10) return;
-    await updateQuantity(itemId, nextQuantity);
+    await updateQuantity(itemId, nextQuantity, cart?.items.find((item) => item.id === itemId)?.productName);
   }
 
   async function removeItem(itemId: string) {

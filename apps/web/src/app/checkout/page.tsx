@@ -3,12 +3,14 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useCart } from '@/components/CartProvider';
+import { useToast } from '@/components/ToastProvider';
 import { api } from '@/lib/api';
 import { formatInr } from '@/lib/format';
 import type { Order, PaymentOption } from '@/lib/types';
 
 export default function CheckoutPage() {
   const { cart, refreshCart } = useCart();
+  const { showToast } = useToast();
   const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([]);
   const [paymentMethod, setPaymentMethod] = useState('upi');
   const [deliveryPin, setDeliveryPin] = useState('201014');
@@ -34,6 +36,7 @@ export default function CheckoutPage() {
       await refreshCart();
       const result = await api.checkout({ paymentMethod, deliveryPin });
       setOrder(result);
+      showToast(`Order placed successfully — ${result.orderId}`);
       await refreshCart();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Checkout failed');
