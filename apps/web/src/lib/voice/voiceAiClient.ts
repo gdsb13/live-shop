@@ -13,6 +13,12 @@ type RtmEngine = {
   subscribe?: (channel: string) => Promise<unknown>;
 };
 
+type VoiceToolkitRtmEngine = RtmEngine & {
+  publish: (channel: string, message: string, options?: Record<string, unknown>) => Promise<void>;
+  addEventListener: (event: string, listener: (...args: unknown[]) => void) => void;
+  removeEventListener: (event: string, listener: (...args: unknown[]) => void) => void;
+};
+
 export { releaseVoiceRtmClient } from './rtmSession';
 
 export async function createVoiceRtmClient(
@@ -52,13 +58,19 @@ export async function initVoiceAiToolkit(options: {
     // No live singleton yet.
   }
 
-  const ai = await AgoraVoiceAI.init({
+  const rtmEngine = options.rtmClient as VoiceToolkitRtmEngine;
+
+  const initConfig = {
     rtcEngine: options.rtcClient,
-    rtmEngine: options.rtmClient,
-    rtmConfig: { rtmEngine: options.rtmClient },
+    rtmEngine,
+    rtmConfig: { rtmEngine },
     renderMode: TranscriptHelperMode.TEXT,
     enableLog: process.env.NODE_ENV === 'development',
-  });
+  };
+
+  const ai = await AgoraVoiceAI.init(
+    initConfig as Parameters<typeof AgoraVoiceAI.init>[0],
+  );
 
   ai.on(AgoraVoiceAIEvents.TRANSCRIPT_UPDATED, (items) => {
     const snapshot = mapSdkTranscriptSnapshot(items, options.shopperRtcUid);
@@ -100,12 +112,15 @@ export async function playRemoteAudioTrack(
 ) {
   if (!track) return;
   track.setVolume(100);
+  const audioTrack = track as IRemoteAudioTrack & {
+    play(element?: HTMLElement | string): Promise<void>;
+  };
   try {
     if (container) {
-      await track.play(container);
+      await audioTrack.play(container);
       return;
     }
-    await track.play();
+    await audioTrack.play();
   } catch (error) {
     console.warn('[VoiceAI] Remote audio play failed:', error);
   }

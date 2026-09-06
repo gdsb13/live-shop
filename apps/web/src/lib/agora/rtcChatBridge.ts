@@ -1,12 +1,19 @@
-import type { IAgoraRTCClient } from 'agora-rtc-sdk-ng';
+import type { IAgoraRTCClient, UID } from 'agora-rtc-sdk-ng';
 import type { LiveChatMessage } from './types';
 
 type ChatListener = (message: LiveChatMessage) => void;
 type ReadyListener = () => void;
+type StreamMessageHandler = (uid: UID, payload: Uint8Array) => void;
+
+type IAgoraRtcStreamClient = IAgoraRTCClient & {
+  sendStreamMessage(payload: Uint8Array): Promise<void>;
+  on(event: 'stream-message', listener: StreamMessageHandler): void;
+  off(event: 'stream-message', listener: StreamMessageHandler): void;
+};
 
 type SessionEntry = {
-  client: IAgoraRTCClient;
-  onMessage: (uid: import('agora-rtc-sdk-ng').UID, payload: Uint8Array) => void;
+  client: IAgoraRtcStreamClient;
+  onMessage: StreamMessageHandler;
 };
 
 const sessions = new Map<string, SessionEntry>();
@@ -74,8 +81,9 @@ export function subscribeRtcChat(sessionId: string, listener: ChatListener) {
 }
 
 export function attachRtcChat(sessionId: string, client: IAgoraRTCClient) {
+  const streamClient = client as IAgoraRtcStreamClient;
   const existing = sessions.get(sessionId);
-  if (existing?.client === client) {
+  if (existing?.client === streamClient) {
     notifyReady(sessionId);
     return;
   }
@@ -85,7 +93,7 @@ export function attachRtcChat(sessionId: string, client: IAgoraRTCClient) {
   }
 
   const entry: SessionEntry = {
-    client,
+    client: streamClient,
     onMessage: (_uid, payload) => {
       const message = parsePayload(payload);
       if (!message) return;
@@ -93,7 +101,7 @@ export function attachRtcChat(sessionId: string, client: IAgoraRTCClient) {
     },
   };
 
-  client.on('stream-message', entry.onMessage);
+  streamClient.on('stream-message', entry.onMessage);
   sessions.set(sessionId, entry);
   notifyReady(sessionId);
 }
@@ -102,7 +110,7 @@ export function detachRtcChat(sessionId: string, client: IAgoraRTCClient) {
   const entry = sessions.get(sessionId);
   if (!entry || entry.client !== client) return;
 
-  client.off('stream-message', entry.onMessage);
+  entry.client.off('stream-message', entry.onMessage);
   sessions.delete(sessionId);
 }
 

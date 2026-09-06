@@ -29,8 +29,7 @@ export function HostBroadcastPanel({
   const canGoLive =
     (sessionStatus === 'SCHEDULED' || sessionStatus === 'LIVE') &&
     state !== 'live' &&
-    !broadcastBlocked &&
-    sessionStatus !== 'ENDED';
+    !broadcastBlocked;
 
   return (
     <div className="agora-panel panel">

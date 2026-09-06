@@ -66,7 +66,7 @@ export function useLiveChat(sessionId: string, sessionStatus: string, isHost = f
       mergeMessages([message]);
     });
 
-    let unsubscribeReady = () => undefined;
+    let unsubscribeReady: () => void = () => {};
     if (isRtcChatReady(sessionId)) {
       connect();
     } else {

@@ -248,8 +248,11 @@ export function useVoiceAssistant() {
       }
 
       const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
-      AgoraRTC.setParameter('ENABLE_AUDIO_PTS', true);
-      AgoraRTC.setParameter('ENABLE_AUDIO_PTS_METADATA', true);
+      const rtcSdk = AgoraRTC as typeof AgoraRTC & {
+        setParameter(key: string, value: boolean): void;
+      };
+      rtcSdk.setParameter('ENABLE_AUDIO_PTS', true);
+      rtcSdk.setParameter('ENABLE_AUDIO_PTS_METADATA', true);
 
       const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
       rtcClientRef.current = client;
