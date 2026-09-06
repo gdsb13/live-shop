@@ -82,6 +82,8 @@ export function useVoiceAssistant() {
   const applyCartRef = useRef<((cart: Cart) => void) | null>(null);
   const farewellPendingRef = useRef(false);
   const farewellAnchorTurnIdRef = useRef<number | null>(null);
+  const farewellReplySeenAtRef = useRef<number | null>(null);
+  const farewellSpeechHeardRef = useRef(false);
   const stoppingRef = useRef(false);
   const stopAssistantRef = useRef<
     ((reason?: 'user_stop' | 'farewell') => Promise<void>) | null
@@ -106,6 +108,8 @@ export function useVoiceAssistant() {
   const clearFarewellState = useCallback(() => {
     farewellPendingRef.current = false;
     farewellAnchorTurnIdRef.current = null;
+    farewellReplySeenAtRef.current = null;
+    farewellSpeechHeardRef.current = false;
   }, []);
 
   const resetAgentUiState = useCallback(() => {
@@ -230,7 +234,23 @@ export function useVoiceAssistant() {
       anchorTurn,
     );
     if (!assistantReply) return;
-    if (agentSpeakingRef.current || thinkingActiveRef.current) return;
+
+    if (farewellReplySeenAtRef.current === null) {
+      farewellReplySeenAtRef.current = Date.now();
+    }
+
+    if (thinkingActiveRef.current) return;
+
+    if (agentSpeakingRef.current) {
+      farewellSpeechHeardRef.current = true;
+      return;
+    }
+
+    // TEXT-mode transcript can finalize before TTS starts — wait for speech to play.
+    if (!farewellSpeechHeardRef.current) {
+      const elapsed = Date.now() - farewellReplySeenAtRef.current;
+      if (elapsed < 3500) return;
+    }
 
     stopAssistantRef.current?.('farewell').catch(() => undefined);
   }, []);
@@ -386,6 +406,9 @@ export function useVoiceAssistant() {
           if (!activeRef.current) return;
           agentSpeakingRef.current = active;
           if (active) {
+            if (farewellPendingRef.current) {
+              farewellSpeechHeardRef.current = true;
+            }
             setState('speaking');
           } else {
             if (!greetingCompleteRef.current) {
