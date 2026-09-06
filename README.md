@@ -204,9 +204,9 @@ This prototype uses **Agora Conversational AI Engine** (server-side `agora-agent
 
 ## Demo walkthrough (reviewer happy path)
 
-1. **Storefront** — [live demo](https://live-shop-teal.vercel.app): browse categories, open a product.
-2. **Discover live** — `/live` → open a scheduled session (e.g. `live-tech-tuesday`).
-3. **Host** — `/host` → **Go live** on that session (camera/mic) → status becomes LIVE.
+1. **Storefront** — [Storefront](https://live-shop-teal.vercel.app): browse categories, open a product.
+2. **Discover live** — `/live` → open a scheduled session (e.g. `live-tech-tuesday`). [Live](https://live-shop-teal.vercel.app/live)
+3. **Host** — `/host` → **Go live** on that session (camera/mic) → status becomes LIVE. [Host](https://live-shop-teal.vercel.app/host)
 4. **Viewer** — `/live/live-tech-tuesday` → watch host video/audio.
 5. **Chat** — enter display name, send messages (RTC data stream).
 6. **Voice AI** — **Ask AI** on the live page → ask about featured product, compare alternatives, check PIN (e.g. `201014`), payment options.
