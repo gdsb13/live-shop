@@ -176,6 +176,10 @@ Discount is **re-evaluated** on cart reads and checkout. When the host ends the 
 | Tool boundary | MCP (`@modelcontextprotocol/sdk`) over HTTP `/mcp` | Thin protocol adapter; commerce stays in customer services |
 | Deploy | Vercel (web), Render (API) | Separate frontend/backend; public HTTPS API for MCP in production |
 
+### Conversational AI Engine vs Agora Studio
+
+This prototype uses **Agora Conversational AI Engine** (server-side `agora-agents` to start/stop managed agents), not **Agora Studio**. The engine matches our programmatic architecture: per-shopper private RTC channels (`ai-{shopperUserId}`), explicit agent lifecycle, STT/LLM/TTS orchestration in Agora’s managed pipeline, shopper/live-session context in a custom system prompt, and MCP/HTTPS tool calls into customer commerce services with server-side discount and cart authority. **Agora Studio** is oriented toward configuring and operating agents in a hosted workflow; we did not use it here because the assignment requires customer-owned session policy, commerce logic, and tool boundaries implemented in our Express services and MCP adapter.
+
 ---
 
 ## Production considerations
@@ -185,11 +189,16 @@ Discount is **re-evaluated** on cart reads and checkout. When the host ends the 
 | Persistence | In-memory cart/sessions; API restart resets state | Customer DB/Redis; durable carts and orders |
 | Auth | Mock `host-*` / `viewer-*` / `shopper-ai-*` IDs | Seller auth, shopper accounts, signed tokens |
 | RTC permissions | Publisher-capable tokens; UI avoids viewer A/V publish | Stricter token roles where chat transport allows; host verification |
-| Scale | Single-process Express | Horizontal API, session directory, CDN/audience mode for large live audiences |
+| Scale | Single-process Express | Horizontal API, session directory; for large live audiences use CDN/audience-mode (or equivalent broadcast fan-out) rather than unbounded per-viewer RTC subscribe to the host |
 | Recording | Demo replay file | Agora Cloud Recording + customer storage lifecycle |
 | Privacy | Documented gaps only | Consent, retention, regional data handling |
-| Observability | `logs/*.log`, stdout | Metrics/traces across Agora, LLM, MCP, and commerce APIs |
+| Observability | `logs/*.log`, stdout only (no metrics/traces/alerts in POC) | See **Observability and troubleshooting** below |
+| Cost | Not measured in POC | See **Production cost drivers** below |
 | Reliability | Best-effort cleanup | Idempotent session/agent lifecycle, MCP timeouts, circuit breakers |
+
+**Observability and troubleshooting (production design, not implemented in POC).** Correlate identifiers across layers—e.g. `sessionId`, `shopperUserId`, `liveSessionId`, `X-Voice-Channel`, and HTTP request IDs—so browser, customer API, MCP, and Agora agent events can be joined in one trace. Monitor: Agora RTC join/publish/subscribe failures and connection quality on `live-{sessionId}` and `ai-{shopperUserId}`; Voice AI pipeline latency and errors (STT, LLM, TTS, agent activation/stop); MCP `tools/call` latency, failures, and recoverable vs fatal tool result status; customer REST/MCP latency and error rates. Use structured logs, metrics, and distributed tracing with dashboards and alerts on thresholds (failed agent start, MCP timeout, checkout failure spike, elevated p95 voice latency).
+
+**Production cost drivers (not priced in POC).** Main drivers: Agora RTC usage and peak concurrent viewers on public live channels; Conversational AI usage (STT/LLM/TTS per Voice AI session); Cloud Recording and object-storage egress if recording is enabled; customer application compute, database, and cache for carts, sessions, and orders. For very large passive audiences, evaluate a broadcast/CDN distribution topology instead of treating every viewer as a full RTC subscriber to the host.
 
 ---
 
