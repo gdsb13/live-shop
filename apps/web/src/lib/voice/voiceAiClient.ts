@@ -60,9 +60,9 @@ export async function initVoiceAiToolkit(options: {
 
   const rtmEngine = options.rtmClient as VoiceToolkitRtmEngine;
 
+  // Toolkit only reads RTM from rtmConfig.rtmEngine (top-level rtmEngine is ignored).
   const initConfig = {
     rtcEngine: options.rtcClient,
-    rtmEngine,
     rtmConfig: { rtmEngine },
     renderMode: TranscriptHelperMode.TEXT,
     enableLog: process.env.NODE_ENV === 'development',

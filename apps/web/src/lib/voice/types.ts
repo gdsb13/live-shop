@@ -15,6 +15,10 @@ export type VoiceTranscriptLine = {
   ts: string;
   /** Agora turn_id when sourced from SDK snapshot. */
   turnId?: number;
+  /** Agora stream_id when sourced from SDK snapshot. */
+  streamId?: number;
+  /** Stable React list identity from SDK turn + stream + transcript order. */
+  lineKey?: string;
   /** Completed turns are never overwritten by partial updates. */
   final?: boolean;
   /** Short latency filler while a tool call is in progress. */

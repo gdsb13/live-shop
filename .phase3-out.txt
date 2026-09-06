@@ -1,0 +1,12 @@
+PASS: API health
+PASS: GET /api/products (regression)
+PASS: GET /api/live-sessions grouped list
+PASS: GET /api/live-sessions/:id
+PASS: tech tuesday already LIVE (prior mutations)
+PASS: invalid start transition rejected
+PASS: beauty hour already ENDED (prior mutations)
+PASS: skip featured-product PATCH (beauty hour not LIVE)
+PASS: beauty hour already ENDED (prior mutations)
+PASS: invalid end transition rejected
+PASS: reject featured product when not LIVE
+FAIL: web home

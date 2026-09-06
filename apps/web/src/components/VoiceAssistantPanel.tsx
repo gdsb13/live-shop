@@ -132,7 +132,11 @@ export function VoiceAssistantPanel() {
         ) : (
           transcripts.map((line, index) => (
             <p
-              key={`${line.role}-${line.ts}-${index}`}
+              key={
+                line.lineKey
+                  ? `${line.lineKey}@${index}`
+                  : `${line.role}:${line.turnId ?? 'na'}:${line.streamId ?? 0}@${index}`
+              }
               className={`voice-ai-line voice-ai-line--${line.role}${line.filler ? ' voice-ai-line--filler' : ''}`}
             >
               <span>{line.role === 'user' ? 'You' : 'Assistant'}</span>

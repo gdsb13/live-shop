@@ -16,20 +16,25 @@ function mapSdkTranscriptSnapshot(items, shopperRtcUid) {
         ? shopperUid
         : String(item.uid);
     const role = uid === shopperUid ? 'user' : 'assistant';
-    const turnId = typeof item.turn_id === 'number' ? item.turn_id : 0;
+    const turnId = typeof item.turn_id === 'number' ? item.turn_id : Number(item.turn_id) || 0;
+    const streamId = typeof item.stream_id === 'number' ? item.stream_id : Number(item.stream_id) || 0;
     const status = typeof item.status === 'number' ? item.status : TurnStatus.IN_PROGRESS;
-    const key = `${role}:${turnId}`;
+    const key = `${role}:${turnId}:${streamId}`;
     if (!latestByKey.has(key)) order.push(key);
     latestByKey.set(key, {
       role,
       turnId,
+      streamId,
       text,
       status,
       final: status === TurnStatus.END || status === TurnStatus.INTERRUPTED,
     });
   }
 
-  return order.map((key) => latestByKey.get(key));
+  return order.map((key, ordinal) => {
+    const entry = latestByKey.get(key);
+    return { ...entry, lineKey: `${key}#${ordinal}` };
+  });
 }
 
 function buildDisplayTranscript(snapshot, { agentSpeaking, agentThinking = false }) {
@@ -88,6 +93,22 @@ const duplicateFinal = mapSdkTranscriptSnapshot(
   shopperRtcUid,
 );
 if (duplicateFinal.length !== 1) fail('identical final events must not duplicate greeting turn');
+
+const dualStream = mapSdkTranscriptSnapshot(
+  [
+    { uid: '9001', text: 'Hi', turn_id: 5, stream_id: 1, status: TurnStatus.END },
+    { uid: '9001', text: 'Hello', turn_id: 5, stream_id: 2, status: TurnStatus.END },
+  ],
+  shopperRtcUid,
+);
+if (dualStream.length !== 2) fail('distinct stream ids must remain separate transcript lines');
+if (dualStream[0].lineKey === dualStream[1].lineKey) fail('line keys must be unique');
+
+const stringTurnId = mapSdkTranscriptSnapshot(
+  [{ uid: '9001', text: 'Hello', turn_id: '1788723080902', stream_id: '0', status: TurnStatus.END }],
+  shopperRtcUid,
+);
+if (stringTurnId[0].turnId !== 1788723080902) fail('string turn_id should coerce to number');
 
 const hiddenInterim = buildDisplayTranscript(
   [{ role: 'assistant', turnId: 0, text: 'Hi, I am Priya', final: false, status: TurnStatus.IN_PROGRESS }],

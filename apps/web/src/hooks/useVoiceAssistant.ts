@@ -178,24 +178,33 @@ export function useVoiceAssistant() {
     stoppingRef.current = true;
     activeRef.current = false;
     clearFarewellState();
+    agentSpeakingRef.current = false;
+    thinkingActiveRef.current = false;
 
     const sessionId = sessionIdRef.current;
     const shopperUserId = shopperUserIdRef.current;
     sessionIdRef.current = '';
     setPollSessionId('');
 
-    setState('idle');
-    setOpen(false);
-    setNotice('');
-    setError('');
+    if (reason === 'farewell') {
+      setState('ended');
+      setOpen(true);
+      setNotice('');
+      setError('');
+    } else {
+      setState('idle');
+      setOpen(false);
+      setNotice('');
+      setError('');
+    }
 
     try {
-      await cleanupVoiceStack();
+      await cleanupVoiceStack({ preserveTranscript: reason === 'farewell' });
       setLiveAudioDucked(false);
       setReplayAudioDucked(false);
       if (sessionId) {
         try {
-          await api.stopVoiceAiSession({ sessionId, shopperUserId, reason: 'user_stop' });
+          await api.stopVoiceAiSession({ sessionId, shopperUserId, reason });
         } catch {
           // ignore stop errors during cleanup
         }
@@ -223,7 +232,7 @@ export function useVoiceAssistant() {
     if (!assistantReply) return;
     if (agentSpeakingRef.current || thinkingActiveRef.current) return;
 
-    stopAssistantRef.current?.('user_stop').catch(() => undefined);
+    stopAssistantRef.current?.('farewell').catch(() => undefined);
   }, []);
 
   const toggleVoiceMicMuted = useCallback(async () => {
@@ -357,10 +366,12 @@ export function useVoiceAssistant() {
             .find((item) => item.role === 'user' && item.final);
           if (latestUserTurn) {
             if (isUserExplicitSessionEndIntent(latestUserTurn.text)) {
-              stopAssistantRef.current?.('user_stop').catch(() => undefined);
+              stopAssistantRef.current?.('farewell').catch(() => undefined);
             } else if (isUserGoodbyeIntent(latestUserTurn.text, { orderCompleted: orderCompletedRef.current })) {
               farewellPendingRef.current = true;
-              farewellAnchorTurnIdRef.current = latestUserTurn.turnId;
+              if (farewellAnchorTurnIdRef.current === null) {
+                farewellAnchorTurnIdRef.current = latestUserTurn.turnId;
+              }
             } else if (
               farewellPendingRef.current &&
               shouldCancelFarewellPending(latestUserTurn.text)
@@ -392,6 +403,7 @@ export function useVoiceAssistant() {
             setState('thinking');
           } else if (!agentSpeakingRef.current) {
             setState(greetingCompleteRef.current ? 'listening' : 'connecting');
+            tryCompleteSessionEnd();
           }
           rebuildTranscriptDisplay();
         },

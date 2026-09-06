@@ -187,7 +187,9 @@ async function startAgoraVoiceSession(sessionContext) {
         model: openAiModel,
         systemMessages: [{ role: 'system', content: buildSystemPrompt(sessionContext) }],
         greetingMessage: ASSISTANT_GREETING,
-        maxHistory: 20,
+        // Commerce flows add user + assistant(tool_calls) + tool + assistant per tool round.
+        // Trimming below ~4 messages per tool orphans tool results and triggers OpenAI 400s.
+        maxHistory: 50,
         params: {
           parallel_tool_calls: false,
         },

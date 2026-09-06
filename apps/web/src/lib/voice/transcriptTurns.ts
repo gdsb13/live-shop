@@ -11,6 +11,7 @@ export type SdkTranscriptItem = {
   role: 'user' | 'assistant';
   turnId: number;
   streamId: number;
+  lineKey: string;
   text: string;
   ts: string;
   status: number;
@@ -24,18 +25,27 @@ function normalizeSpeakerUid(uid: string | number | undefined, shopperRtcUid: nu
   return String(uid);
 }
 
+function asNumericId(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
 /**
  * TRANSCRIPT_UPDATED delivers the full conversation history each time.
- * Collapse to one item per (role, turn_id) using the latest text from the snapshot.
+ * Collapse to one item per (role, turn_id, stream_id) using the latest text.
  */
 export function mapSdkTranscriptSnapshot(
   items: Array<{
     uid?: string | number;
     text?: string;
     _time?: number;
-    turn_id?: number;
+    turn_id?: number | string;
     status?: number;
-    stream_id?: number;
+    stream_id?: number | string;
   }>,
   shopperRtcUid: number,
 ): SdkTranscriptItem[] {
@@ -49,15 +59,16 @@ export function mapSdkTranscriptSnapshot(
 
     const speakerUid = normalizeSpeakerUid(item.uid, shopperRtcUid);
     const role = speakerUid === shopperUid ? ('user' as const) : ('assistant' as const);
-    const turnId = typeof item.turn_id === 'number' ? item.turn_id : 0;
+    const turnId = asNumericId(item.turn_id);
+    const streamId = asNumericId(item.stream_id);
     const status = typeof item.status === 'number' ? item.status : TurnStatus.IN_PROGRESS;
-    const key = `${role}:${turnId}`;
+    const key = `${role}:${turnId}:${streamId}`;
     const timestamp =
       typeof item._time === 'number' && item._time > 0
         ? item._time > 1e12
           ? item._time
           : item._time * 1000
-        : Date.now();
+        : 0;
 
     if (!latestByKey.has(key)) {
       order.push(key);
@@ -66,15 +77,22 @@ export function mapSdkTranscriptSnapshot(
     latestByKey.set(key, {
       role,
       turnId,
-      streamId: typeof item.stream_id === 'number' ? item.stream_id : 0,
+      streamId,
+      lineKey: key,
       text,
-      ts: new Date(timestamp).toISOString(),
+      ts: timestamp > 0 ? new Date(timestamp).toISOString() : '',
       status,
       final: status === TurnStatus.END || status === TurnStatus.INTERRUPTED,
     });
   }
 
-  return order.map((key) => latestByKey.get(key)!);
+  return order.map((key, ordinal) => {
+    const entry = latestByKey.get(key)!;
+    return {
+      ...entry,
+      lineKey: `${key}#${ordinal}`,
+    };
+  });
 }
 
 export function buildDisplayTranscript(
@@ -97,6 +115,8 @@ export function buildDisplayTranscript(
       ts: item.ts,
       final: item.final,
       turnId: item.turnId,
+      streamId: item.streamId,
+      lineKey: item.lineKey,
     });
   }
 

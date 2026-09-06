@@ -3,6 +3,7 @@ type RtmEngine = {
   logout: () => Promise<unknown>;
   subscribe?: (channel: string) => Promise<unknown>;
   unsubscribe?: (channel: string) => Promise<unknown>;
+  release?: () => Promise<unknown> | void;
 };
 
 let activeClient: RtmEngine | null = null;
@@ -14,6 +15,22 @@ function sleep(ms: number) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+async function destroyRtmClient(client: RtmEngine) {
+  try {
+    await client.logout();
+  } catch {
+    // RTM session may already be gone.
+  }
+
+  if (typeof client.release === 'function') {
+    try {
+      await client.release();
+    } catch {
+      // Instance may already be released.
+    }
+  }
 }
 
 export async function releaseVoiceRtmClient(): Promise<void> {
@@ -38,12 +55,8 @@ export async function releaseVoiceRtmClient(): Promise<void> {
         // Channel may already be unsubscribed.
       }
     }
-    try {
-      await client.logout();
-    } catch {
-      // RTM session may already be gone.
-    }
-    await sleep(900);
+    await destroyRtmClient(client);
+    await sleep(300);
   })();
 
   try {
@@ -65,7 +78,7 @@ export async function createVoiceRtmClient(
   const AgoraRTM = mod.default ?? mod;
   const RTM = AgoraRTM.RTM ?? AgoraRTM;
   const userId = String(rtcUid);
-  const client = new RTM(appId, userId);
+  const client = new RTM(appId, userId) as RtmEngine;
   await client.login({ token: rtmToken });
 
   if (typeof client.subscribe === 'function') {
