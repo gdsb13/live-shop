@@ -72,6 +72,9 @@ export default function HomePage() {
               <Link href="/live" className="button-secondary">
                 View schedule
               </Link>
+              <Link href="/host" className="button-secondary">
+                Host / Seller Portal
+              </Link>
             </div>
           </div>
           <div className="hero-panel">
