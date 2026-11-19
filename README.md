@@ -1,6 +1,6 @@
 # Live Shop — AI-Powered Live Commerce Prototype
 
-A working web prototype for the Agora Solutions Architect take-home: a conventional multi-category storefront, real-time live shopping, and a private voice AI shopping assistant. Agora handles realtime media and Conversational AI; the Node/Express backend remains authoritative for commerce, session policy, and discounts.
+A working web prototype for a conventional multi-category storefront, real-time live shopping, and a private voice AI shopping assistant. Agora handles realtime media and Conversational AI; the Node/Express backend remains authoritative for commerce, session policy, and discounts.
 
 **Live demo:**
 1. **Storefront** — browse categories, open a product. [Storefront](https://live-shop-teal.vercel.app)
